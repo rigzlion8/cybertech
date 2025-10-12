@@ -15,6 +15,7 @@ import json
 from modules.scanner import SecurityScanner
 from modules.report_generator import ReportGenerator
 from modules.email_sender import EmailSender
+from modules.scan_storage import ScanStorage
 
 # Load environment variables
 load_dotenv()
@@ -40,6 +41,9 @@ logger = logging.getLogger(__name__)
 
 # Create reports directory if it doesn't exist
 os.makedirs('reports', exist_ok=True)
+
+# Initialize scan storage
+scan_storage = ScanStorage()
 
 
 @app.route('/')
@@ -122,6 +126,9 @@ def perform_scan():
             if not email_result['success']:
                 logger.warning(f"Failed to send email: {email_result.get('error')}")
         
+        # Save scan to storage
+        scan_storage.save_scan(scan_results)
+        
         return jsonify({
             'status': 'success',
             'scan_id': scan_id,
@@ -190,6 +197,123 @@ def quick_check():
         
     except Exception as e:
         logger.error(f"Quick check error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/admin')
+def admin_page():
+    """Serve the admin page"""
+    return send_from_directory('static', 'admin.html')
+
+
+@app.route('/api/admin/scans', methods=['GET'])
+def get_all_scans():
+    """
+    Get all scans with pagination
+    Query params:
+        - limit: Max number of scans (default: 100)
+        - offset: Number of scans to skip (default: 0)
+        - search: Search query string (optional)
+    """
+    try:
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        search = request.args.get('search', '').strip()
+        
+        if search:
+            scans = scan_storage.search_scans(search, limit=limit)
+            total = len(scans)
+        else:
+            scans = scan_storage.get_all_scans(limit=limit, offset=offset)
+            total = scan_storage.get_scan_count()
+        
+        return jsonify({
+            'status': 'success',
+            'scans': scans,
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting scans: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/admin/scan/<scan_id>', methods=['GET'])
+def get_scan_details(scan_id):
+    """Get detailed scan information by ID"""
+    try:
+        scan = scan_storage.get_scan(scan_id)
+        
+        if not scan:
+            return jsonify({
+                'status': 'error',
+                'error': 'Scan not found'
+            }), 404
+        
+        return jsonify({
+            'status': 'success',
+            'scan': scan
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting scan {scan_id}: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/admin/scan/<scan_id>', methods=['DELETE'])
+def delete_scan(scan_id):
+    """Delete a scan by ID"""
+    try:
+        success = scan_storage.delete_scan(scan_id)
+        
+        if not success:
+            return jsonify({
+                'status': 'error',
+                'error': 'Scan not found or could not be deleted'
+            }), 404
+        
+        # Also try to delete the PDF report
+        report_path = f'reports/scan_{scan_id}.pdf'
+        if os.path.exists(report_path):
+            os.remove(report_path)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Scan deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error deleting scan {scan_id}: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/admin/statistics', methods=['GET'])
+def get_statistics():
+    """Get overall scan statistics"""
+    try:
+        stats = scan_storage.get_statistics()
+        
+        return jsonify({
+            'status': 'success',
+            'statistics': stats
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting statistics: {str(e)}")
         return jsonify({
             'status': 'error',
             'error': str(e)

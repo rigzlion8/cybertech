@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - CyberTech Security Scanner</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Admin-specific styles */
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem 20px;
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--background-light);
+        }
+
+        .admin-title {
+            font-size: 2rem;
+            color: var(--secondary-color);
+            font-weight: 700;
+        }
+
+        .admin-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .search-input {
+            padding: 0.6rem 1rem;
+            border: 2px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            width: 300px;
+            transition: var(--transition);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card.green {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+        }
+
+        .stat-card.orange {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        }
+
+        .stat-card.red {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .scans-table-container {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 1.5rem;
+            background: var(--background-light);
+            border-bottom: 2px solid #ddd;
+        }
+
+        .table-header h2 {
+            margin: 0;
+            color: var(--secondary-color);
+            font-size: 1.5rem;
+        }
+
+        .scans-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .scans-table thead {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .scans-table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .scans-table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--background-light);
+        }
+
+        .scans-table tbody tr {
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .scans-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .score-badge {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .score-badge.high {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .score-badge.medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .score-badge.low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .risk-badge.LOW {
+            background: #27ae60;
+            color: white;
+        }
+
+        .risk-badge.MEDIUM {
+            background: #f39c12;
+            color: white;
+        }
+
+        .risk-badge.HIGH {
+            background: #e67e22;
+            color: white;
+        }
+
+        .risk-badge.CRITICAL {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-icon {
+            padding: 0.5rem 0.8rem;
+            font-size: 0.9rem;
+            border: none;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-icon:hover {
+            background: #2980b9;
+        }
+
+        .btn-icon.delete {
+            background: var(--danger-color);
+        }
+
+        .btn-icon.delete:hover {
+            background: #c0392b;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.5rem;
+            background: var(--background-light);
+        }
+
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .pagination button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .pagination button:not(:disabled):hover {
+            background: #2980b9;
+        }
+
+        .pagination-info {
+            color: var(--text-light);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: var(--border-radius);
+            max-width: 1000px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 2px solid var(--background-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            color: var(--secondary-color);
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 2rem;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .modal-close:hover {
+            color: var(--secondary-color);
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .detail-section {
+            margin-bottom: 2rem;
+        }
+
+        .detail-section h3 {
+            color: var(--secondary-color);
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+            border-bottom: 2px solid var(--background-light);
+            padding-bottom: 0.5rem;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .detail-item {
+            background: var(--background-light);
+            padding: 1rem;
+            border-radius: var(--border-radius);
+        }
+
+        .detail-label {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            margin-bottom: 0.3rem;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: var(--secondary-color);
+            font-size: 1.1rem;
+        }
+
+        .category-results {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 1rem;
+        }
+
+        .category-title {
+            font-size: 1.2rem;
+            color: var(--secondary-color);
+            margin-bottom: 1rem;
+        }
+
+        .issue-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .issue-item {
+            padding: 0.8rem;
+            margin-bottom: 0.5rem;
+            background: white;
+            border-left: 4px solid var(--primary-color);
+            border-radius: 4px;
+        }
+
+        .issue-item.high {
+            border-left-color: #e74c3c;
+        }
+
+        .issue-item.medium {
+            border-left-color: #f39c12;
+        }
+
+        .issue-item.low {
+            border-left-color: #3498db;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-light);
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-light);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <span class="logo-icon">🛡️</span>
+                <span class="logo-text">CyberTech Admin</span>
+            </div>
+            <nav class="nav">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/admin" class="nav-link active">Admin Dashboard</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Admin Container -->
+    <div class="admin-container">
+        <a href="/" class="back-link">← Back to Home</a>
+        
+        <div class="admin-header">
+            <h1 class="admin-title">Scan Reports Dashboard</h1>
+            <div class="admin-actions">
+                <div class="search-box">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        class="search-input" 
+                        placeholder="Search by Scan ID, Target, or Risk Level..."
+                    >
+                    <button class="btn btn-primary" onclick="searchScans()">Search</button>
+                    <button class="btn btn-secondary" onclick="clearSearch()">Clear</button>
+                </div>
+                <button class="btn btn-secondary" onclick="refreshScans()">🔄 Refresh</button>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-label">Total Scans</div>
+                <div class="stat-value" id="totalScans">-</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-label">Average Security Score</div>
+                <div class="stat-value" id="avgScore">-</div>
+            </div>
+            <div class="stat-card orange">
+                <div class="stat-label">High Risk Scans</div>
+                <div class="stat-value" id="highRiskScans">-</div>
+            </div>
+            <div class="stat-card red">
+                <div class="stat-label">Critical Risk Scans</div>
+                <div class="stat-value" id="criticalScans">-</div>
+            </div>
+        </div>
+
+        <!-- Scans Table -->
+        <div class="scans-table-container">
+            <div class="table-header">
+                <h2>All Scan Reports</h2>
+            </div>
+            
+            <div id="tableContent">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading scans...</p>
+                </div>
+            </div>
+
+            <div class="pagination" id="pagination" style="display: none;">
+                <button id="prevBtn" onclick="previousPage()">← Previous</button>
+                <span class="pagination-info" id="paginationInfo">Page 1</span>
+                <button id="nextBtn" onclick="nextPage()">Next →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Details Modal -->
+    <div id="scanModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Scan Details</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
+
