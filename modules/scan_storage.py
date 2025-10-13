@@ -1,6 +1,6 @@
 """
 Scan Storage Module
-Handles persistence of scan metadata and results
+Factory for creating storage handlers (JSON or MongoDB)
 """
 
 import os
@@ -12,7 +12,47 @@ from typing import Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-class ScanStorage:
+def get_storage_backend(backend='auto'):
+    """
+    Factory function to get appropriate storage backend
+    
+    Args:
+        backend: 'auto', 'mongodb', or 'json'
+        
+    Returns:
+        Storage instance (MongoDBStorage or JSONStorage)
+    """
+    if backend == 'auto':
+        # Check if MongoDB is configured
+        mongodb_uri = os.getenv('MONGODB_URI')
+        use_mongodb = os.getenv('USE_MONGODB', 'false').lower() == 'true'
+        
+        if mongodb_uri or use_mongodb:
+            backend = 'mongodb'
+        else:
+            backend = 'json'
+    
+    if backend == 'mongodb':
+        try:
+            from .mongodb_storage import MongoDBStorage
+            logger.info("Using MongoDB storage backend")
+            return MongoDBStorage()
+        except Exception as e:
+            logger.warning(f"Failed to initialize MongoDB, falling back to JSON: {e}")
+            backend = 'json'
+    
+    if backend == 'json':
+        logger.info("Using JSON storage backend")
+        return JSONStorage()
+    
+    raise ValueError(f"Unknown storage backend: {backend}")
+
+
+# Alias for backward compatibility
+ScanStorage = get_storage_backend
+
+
+class JSONStorage:
     """Storage handler for scan metadata and results"""
     
     def __init__(self, storage_path='data/scans.json'):
@@ -287,4 +327,174 @@ class ScanStorage:
         except Exception as e:
             logger.error(f"Error getting statistics: {e}")
             return {}
+    
+    def get_target_history(self, target: str, limit: int = 10) -> List[Dict]:
+        """
+        Get scan history for a specific target
+        
+        Args:
+            target: Target URL/IP to get history for
+            limit: Maximum number of results
+            
+        Returns:
+            List of scans for the target, sorted by date (newest first)
+        """
+        try:
+            data = self._read_data()
+            target_scans = [
+                s for s in data['scans']
+                if s.get('target') == target
+            ]
+            return target_scans[:limit]
+        except Exception as e:
+            logger.error(f"Error getting target history: {e}")
+            return []
+    
+    def get_trend_data(self, days: int = 30) -> Dict:
+        """
+        Get trend data for the specified number of days
+        
+        Args:
+            days: Number of days to analyze
+            
+        Returns:
+            Dict with trend information
+        """
+        try:
+            from datetime import datetime, timedelta
+            from collections import defaultdict
+            
+            data = self._read_data()
+            scans = data['scans']
+            
+            start_date = datetime.utcnow() - timedelta(days=days)
+            
+            # Filter scans within date range
+            recent_scans = [
+                s for s in scans
+                if datetime.fromisoformat(s.get('start_time', '')) >= start_date
+            ]
+            
+            # Daily scan counts and scores
+            daily_data = defaultdict(lambda: {'count': 0, 'total_score': 0})
+            risk_trends = defaultdict(lambda: defaultdict(int))
+            target_counts = defaultdict(lambda: {'count': 0, 'total_score': 0, 'last_scan': None})
+            
+            for scan in recent_scans:
+                scan_date = datetime.fromisoformat(scan['start_time']).strftime('%Y-%m-%d')
+                
+                # Daily counts
+                daily_data[scan_date]['count'] += 1
+                daily_data[scan_date]['total_score'] += scan.get('security_score', 0)
+                
+                # Risk trends
+                risk_level = scan.get('risk_level', 'UNKNOWN')
+                risk_trends[scan_date][risk_level] += 1
+                
+                # Target counts
+                target = scan.get('target')
+                target_counts[target]['count'] += 1
+                target_counts[target]['total_score'] += scan.get('security_score', 0)
+                if not target_counts[target]['last_scan'] or scan['start_time'] > target_counts[target]['last_scan']:
+                    target_counts[target]['last_scan'] = scan['start_time']
+            
+            # Format daily data
+            formatted_daily = [
+                {
+                    '_id': date,
+                    'count': data['count'],
+                    'avg_score': data['total_score'] / data['count'] if data['count'] > 0 else 0
+                }
+                for date, data in sorted(daily_data.items())
+            ]
+            
+            # Format risk trends
+            formatted_risk_trends = [
+                {
+                    '_id': {'date': date, 'risk_level': risk},
+                    'count': count
+                }
+                for date, risks in sorted(risk_trends.items())
+                for risk, count in risks.items()
+            ]
+            
+            # Format top targets
+            top_targets = [
+                {
+                    '_id': target,
+                    'scan_count': data['count'],
+                    'avg_score': data['total_score'] / data['count'] if data['count'] > 0 else 0,
+                    'last_scan': data['last_scan']
+                }
+                for target, data in sorted(
+                    target_counts.items(),
+                    key=lambda x: x[1]['count'],
+                    reverse=True
+                )[:10]
+            ]
+            
+            return {
+                'period_days': days,
+                'daily_scans': formatted_daily,
+                'risk_trends': formatted_risk_trends,
+                'top_targets': top_targets
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting trend data: {e}")
+            return {}
+    
+    def get_score_improvement_trend(self, target: str) -> Dict:
+        """
+        Get security score improvement trend for a specific target
+        
+        Args:
+            target: Target URL/IP
+            
+        Returns:
+            Dict with score history
+        """
+        try:
+            data = self._read_data()
+            target_scans = [
+                {
+                    'scan_id': s['scan_id'],
+                    'start_time': s['start_time'],
+                    'security_score': s['security_score'],
+                    'risk_level': s['risk_level']
+                }
+                for s in data['scans']
+                if s.get('target') == target
+            ]
+            
+            # Sort by start_time
+            target_scans.sort(key=lambda x: x['start_time'])
+            
+            if not target_scans:
+                return {'target': target, 'scans': []}
+            
+            # Calculate improvement
+            if len(target_scans) > 1:
+                first_score = target_scans[0]['security_score']
+                last_score = target_scans[-1]['security_score']
+                improvement = last_score - first_score
+            else:
+                improvement = 0
+            
+            return {
+                'target': target,
+                'total_scans': len(target_scans),
+                'first_score': target_scans[0]['security_score'],
+                'latest_score': target_scans[-1]['security_score'],
+                'improvement': round(improvement, 2),
+                'scans': target_scans
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting score improvement: {e}")
+            return {}
+    
+    def close(self):
+        """Close connection (no-op for JSON storage)"""
+        pass
 

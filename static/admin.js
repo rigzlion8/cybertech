@@ -6,9 +6,16 @@ const itemsPerPage = 20;
 let totalScans = 0;
 let currentSearch = '';
 
+// Chart instances
+let dailyScansChart = null;
+let avgScoresChart = null;
+let riskTrendsChart = null;
+let currentTrendDays = 30;
+
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', () => {
     loadStatistics();
+    loadTrends(30);
     loadScans();
     setupEventListeners();
 });
@@ -469,5 +476,333 @@ function showError(message) {
 
 function showSuccess(message) {
     alert('Success: ' + message);
+}
+
+// Trend Analysis Functions
+
+async function loadTrends(days = 30) {
+    try {
+        currentTrendDays = days;
+        const response = await fetch(`${API_BASE_URL}/api/admin/trends?days=${days}`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            displayTrends(data.trends);
+        } else {
+            showError('Failed to load trends');
+        }
+    } catch (error) {
+        console.error('Error loading trends:', error);
+        showError('Network error while loading trends.');
+    }
+}
+
+function displayTrends(trends) {
+    // Daily Scans Chart
+    const dailyData = trends.daily_scans || [];
+    const dates = dailyData.map(d => d._id);
+    const scanCounts = dailyData.map(d => d.count);
+    const avgScores = dailyData.map(d => d.avg_score || 0);
+
+    // Create/Update Daily Scans Chart
+    const dailyCtx = document.getElementById('dailyScansChart');
+    if (dailyScansChart) {
+        dailyScansChart.destroy();
+    }
+    dailyScansChart = new Chart(dailyCtx, {
+        type: 'bar',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Scans',
+                data: scanCounts,
+                backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                borderColor: 'rgba(52, 152, 219, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+
+    // Create/Update Average Scores Chart
+    const scoresCtx = document.getElementById('avgScoresChart');
+    if (avgScoresChart) {
+        avgScoresChart.destroy();
+    }
+    avgScoresChart = new Chart(scoresCtx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Avg Score',
+                data: avgScores,
+                fill: true,
+                backgroundColor: 'rgba(46, 204, 113, 0.2)',
+                borderColor: 'rgba(46, 204, 113, 1)',
+                borderWidth: 2,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+
+    // Risk Trends Chart
+    const riskData = trends.risk_trends || [];
+    const riskByDate = {};
+    
+    riskData.forEach(item => {
+        const date = item._id.date;
+        const risk = item._id.risk_level;
+        if (!riskByDate[date]) {
+            riskByDate[date] = { LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 };
+        }
+        riskByDate[date][risk] = item.count;
+    });
+
+    const riskDates = Object.keys(riskByDate).sort();
+    const riskLevels = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+    const riskColors = {
+        'LOW': 'rgba(46, 204, 113, 0.8)',
+        'MEDIUM': 'rgba(243, 156, 18, 0.8)',
+        'HIGH': 'rgba(230, 126, 34, 0.8)',
+        'CRITICAL': 'rgba(231, 76, 60, 0.8)'
+    };
+
+    const datasets = riskLevels.map(level => ({
+        label: level,
+        data: riskDates.map(date => riskByDate[date][level] || 0),
+        backgroundColor: riskColors[level],
+        borderColor: riskColors[level].replace('0.8', '1'),
+        borderWidth: 1
+    }));
+
+    const riskCtx = document.getElementById('riskTrendsChart');
+    if (riskTrendsChart) {
+        riskTrendsChart.destroy();
+    }
+    riskTrendsChart = new Chart(riskCtx, {
+        type: 'bar',
+        data: {
+            labels: riskDates,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                x: {
+                    stacked: true
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+
+    // Top Targets List
+    const topTargets = trends.top_targets || [];
+    const topTargetsList = document.getElementById('topTargetsList');
+    
+    if (topTargets.length === 0) {
+        topTargetsList.innerHTML = '<p style="text-align: center; color: #7f8c8d; padding: 2rem;">No data available for this period</p>';
+        return;
+    }
+
+    let html = '<div style="display: flex; flex-direction: column; gap: 0.5rem;">';
+    topTargets.forEach((target, index) => {
+        const scoreColor = getScoreColor(target.avg_score);
+        html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.8rem; background: #f8f9fa; border-radius: 5px; cursor: pointer;"
+                 onclick="viewTargetTrend('${escapeHtml(target._id)}')">
+                <div style="flex: 1;">
+                    <strong>${index + 1}. ${escapeHtml(target._id)}</strong>
+                    <div style="font-size: 0.85rem; color: #7f8c8d;">
+                        ${target.scan_count} scan${target.scan_count !== 1 ? 's' : ''}
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-weight: bold; color: ${scoreColor};">
+                        ${target.avg_score.toFixed(1)}/100
+                    </div>
+                    <div style="font-size: 0.85rem; color: #7f8c8d;">
+                        Avg Score
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    topTargetsList.innerHTML = html;
+}
+
+async function viewTargetTrend(target) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/admin/target/${encodeURIComponent(target)}/improvement`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            displayTargetTrendModal(data.improvement);
+        } else {
+            showError('Failed to load target trend');
+        }
+    } catch (error) {
+        console.error('Error loading target trend:', error);
+        showError('Network error while loading target trend.');
+    }
+}
+
+function displayTargetTrendModal(improvement) {
+    const modalBody = document.getElementById('modalBody');
+    const scans = improvement.scans || [];
+
+    let html = `
+        <div class="detail-section">
+            <h3>Target: ${escapeHtml(improvement.target)}</h3>
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <div class="detail-label">Total Scans</div>
+                    <div class="detail-value">${improvement.total_scans}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">First Score</div>
+                    <div class="detail-value" style="color: ${getScoreColor(improvement.first_score)};">
+                        ${improvement.first_score}/100
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Latest Score</div>
+                    <div class="detail-value" style="color: ${getScoreColor(improvement.latest_score)};">
+                        ${improvement.latest_score}/100
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Improvement</div>
+                    <div class="detail-value" style="color: ${improvement.improvement >= 0 ? '#27ae60' : '#e74c3c'};">
+                        ${improvement.improvement >= 0 ? '+' : ''}${improvement.improvement}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>Score History</h3>
+            <div style="background: white; padding: 1.5rem; border-radius: 8px;">
+                <canvas id="targetTrendChart"></canvas>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>Scan History</h3>
+            <div style="max-height: 300px; overflow-y: auto;">
+    `;
+
+    scans.forEach((scan, index) => {
+        const date = new Date(scan.start_time).toLocaleString();
+        html += `
+            <div style="padding: 1rem; margin-bottom: 0.5rem; background: #f8f9fa; border-radius: 5px; cursor: pointer;"
+                 onclick="closeModal(); viewScanDetails('${scan.scan_id}')">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${index + 1}. Scan ${scan.scan_id}</strong>
+                        <div style="font-size: 0.85rem; color: #7f8c8d;">${date}</div>
+                    </div>
+                    <div>
+                        <span class="score-badge ${getScoreClass(scan.security_score)}">
+                            ${scan.security_score}/100
+                        </span>
+                        <span class="risk-badge ${scan.risk_level}">${scan.risk_level}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += `
+            </div>
+        </div>
+    `;
+
+    modalBody.innerHTML = html;
+    document.getElementById('scanModal').classList.add('active');
+
+    // Create trend chart
+    const ctx = document.getElementById('targetTrendChart');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: scans.map((s, i) => `Scan ${i + 1}`),
+            datasets: [{
+                label: 'Security Score',
+                data: scans.map(s => s.security_score),
+                fill: true,
+                backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                borderColor: 'rgba(52, 152, 219, 1)',
+                borderWidth: 2,
+                tension: 0.4,
+                pointRadius: 5,
+                pointHoverRadius: 7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Score: ${context.parsed.y}/100`;
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 

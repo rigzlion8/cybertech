@@ -320,6 +320,70 @@ def get_statistics():
         }), 500
 
 
+@app.route('/api/admin/trends', methods=['GET'])
+def get_trends():
+    """
+    Get trend data for the specified period
+    Query params:
+        - days: Number of days to analyze (default: 30)
+    """
+    try:
+        days = int(request.args.get('days', 30))
+        trend_data = scan_storage.get_trend_data(days=days)
+        
+        return jsonify({
+            'status': 'success',
+            'trends': trend_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting trends: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/admin/target/<path:target>/history', methods=['GET'])
+def get_target_scan_history(target):
+    """Get scan history for a specific target"""
+    try:
+        limit = int(request.args.get('limit', 10))
+        history = scan_storage.get_target_history(target, limit=limit)
+        
+        return jsonify({
+            'status': 'success',
+            'target': target,
+            'history': history
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting target history: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/admin/target/<path:target>/improvement', methods=['GET'])
+def get_target_improvement(target):
+    """Get security score improvement trend for a specific target"""
+    try:
+        improvement_data = scan_storage.get_score_improvement_trend(target)
+        
+        return jsonify({
+            'status': 'success',
+            'improvement': improvement_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting score improvement: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({'error': 'Endpoint not found', 'status': 'error'}), 404
