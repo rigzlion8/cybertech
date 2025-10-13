@@ -71,7 +71,19 @@ async function handleScanSubmit(e) {
         if (response.ok && data.status === 'success') {
             currentScanId = data.scan_id;
             displayResults(data.results);
-            showAlert('Scan completed successfully! Report sent to your email.', 'success');
+            
+            // Update download button based on report availability
+            const downloadBtn = document.getElementById('downloadBtn');
+            if (data.report_available) {
+                downloadBtn.disabled = false;
+                downloadBtn.style.opacity = '1';
+                showAlert('Scan completed successfully!', 'success');
+            } else {
+                downloadBtn.disabled = true;
+                downloadBtn.style.opacity = '0.5';
+                downloadBtn.title = 'PDF report generation in progress or failed';
+                showAlert('Scan completed! Note: PDF report may not be available.', 'success');
+            }
         } else {
             showAlert(data.error || 'Scan failed. Please try again.', 'error');
         }
@@ -119,11 +131,30 @@ function displayResults(results) {
     let detailsHTML = '<h4 style="margin-bottom: 1rem;">Detailed Findings</h4>';
     
     const scanResults = results.results || {};
+    const categories = Object.entries(scanResults).filter(([_, data]) => typeof data === 'object');
+    const showLimit = 3;
+    const hasMoreCategories = categories.length > showLimit;
     
-    for (const [category, categoryResults] of Object.entries(scanResults)) {
-        if (typeof categoryResults === 'object') {
-            detailsHTML += buildCategorySection(category, categoryResults);
-        }
+    categories.forEach(([category, categoryResults], index) => {
+        const isHidden = index >= showLimit;
+        const hiddenClass = isHidden ? 'hidden-category' : '';
+        const hiddenStyle = isHidden ? 'display: none;' : '';
+        
+        detailsHTML += `<div class="${hiddenClass}" data-category="hidden" style="${hiddenStyle}">`;
+        detailsHTML += buildCategorySection(category, categoryResults);
+        detailsHTML += '</div>';
+    });
+    
+    // Add "Read More" button if there are more than 3 categories
+    if (hasMoreCategories) {
+        detailsHTML += `
+            <div style="text-align: center; margin-top: 1.5rem;">
+                <button onclick="showAllCategories()" id="readMoreBtn" 
+                    style="padding: 0.75rem 2rem; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3); transition: all 0.3s ease;">
+                    📋 Show ${categories.length - showLimit} More Categories
+                </button>
+            </div>
+        `;
     }
     
     resultsDetails.innerHTML = detailsHTML;
@@ -163,12 +194,18 @@ function buildCategorySection(category, data) {
     
     // Issues
     if (data.issues && data.issues.length > 0) {
-        html += '<div style="margin-top: 1rem;"><strong>Issues Found:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
-        data.issues.forEach(issue => {
+        const issueId = 'issues_' + Math.random().toString(36).substr(2, 9);
+        const showLimit = 3;
+        const hasMore = data.issues.length > showLimit;
+        
+        html += `<div style="margin-top: 1rem;"><strong>Issues Found (${data.issues.length}):</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">`;
+        
+        data.issues.forEach((issue, index) => {
             const severity = issue.severity || 'MEDIUM';
             const severityColor = getSeverityColor(severity);
+            const hideClass = index >= showLimit ? 'hidden-item' : '';
             html += `
-                <li style="margin-bottom: 0.5rem;">
+                <li class="${hideClass}" data-parent="${issueId}" style="margin-bottom: 0.5rem; ${index >= showLimit ? 'display: none;' : ''}">
                     <span style="color: ${severityColor}; font-weight: bold;">
                         [${severity.toUpperCase()}]
                     </span>
@@ -176,17 +213,35 @@ function buildCategorySection(category, data) {
                 </li>
             `;
         });
-        html += '</ul></div>';
+        
+        html += '</ul>';
+        
+        if (hasMore) {
+            html += `
+                <button onclick="toggleDetails('${issueId}')" id="btn_${issueId}" 
+                    style="margin-top: 0.5rem; padding: 0.4rem 1rem; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                    Show ${data.issues.length - showLimit} More
+                </button>
+            `;
+        }
+        
+        html += '</div>';
     }
     
     // Vulnerabilities
     if (data.vulnerabilities && data.vulnerabilities.length > 0) {
-        html += '<div style="margin-top: 1rem;"><strong>Vulnerabilities:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
-        data.vulnerabilities.forEach(vuln => {
+        const vulnId = 'vuln_' + Math.random().toString(36).substr(2, 9);
+        const showLimit = 3;
+        const hasMore = data.vulnerabilities.length > showLimit;
+        
+        html += `<div style="margin-top: 1rem;"><strong>Vulnerabilities (${data.vulnerabilities.length}):</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">`;
+        
+        data.vulnerabilities.forEach((vuln, index) => {
             const severity = vuln.severity || 'HIGH';
             const severityColor = getSeverityColor(severity);
+            const hideClass = index >= showLimit ? 'hidden-item' : '';
             html += `
-                <li style="margin-bottom: 0.5rem;">
+                <li class="${hideClass}" data-parent="${vulnId}" style="margin-bottom: 0.5rem; ${index >= showLimit ? 'display: none;' : ''}">
                     <span style="color: ${severityColor}; font-weight: bold;">
                         [${severity.toUpperCase()}]
                     </span>
@@ -194,7 +249,19 @@ function buildCategorySection(category, data) {
                 </li>
             `;
         });
-        html += '</ul></div>';
+        
+        html += '</ul>';
+        
+        if (hasMore) {
+            html += `
+                <button onclick="toggleDetails('${vulnId}')" id="btn_${vulnId}" 
+                    style="margin-top: 0.5rem; padding: 0.4rem 1rem; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                    Show ${data.vulnerabilities.length - showLimit} More
+                </button>
+            `;
+        }
+        
+        html += '</div>';
     }
     
     // Open Ports
@@ -226,19 +293,37 @@ function buildCategorySection(category, data) {
     
     // Sensitive Files Found (Directory Enumeration)
     if (data.sensitive_files_found && data.sensitive_files_found.length > 0) {
-        html += '<div style="margin-top: 1rem;"><strong>Sensitive Files Exposed:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
-        data.sensitive_files_found.forEach(file => {
+        const fileId = 'files_' + Math.random().toString(36).substr(2, 9);
+        const showLimit = 3;
+        const hasMore = data.sensitive_files_found.length > showLimit;
+        
+        html += `<div style="margin-top: 1rem;"><strong>Sensitive Files Exposed (${data.sensitive_files_found.length}):</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">`;
+        
+        data.sensitive_files_found.forEach((file, index) => {
             const severity = file.severity || 'HIGH';
             const severityColor = getSeverityColor(severity);
+            const hideClass = index >= showLimit ? 'hidden-item' : '';
             html += `
-                <li style="margin-bottom: 0.5rem;">
+                <li class="${hideClass}" data-parent="${fileId}" style="margin-bottom: 0.5rem; ${index >= showLimit ? 'display: none;' : ''}">
                     <span style="color: ${severityColor}; font-weight: bold;">[${severity}]</span>
                     ${file.path || file.url || 'Unknown file'}
                     ${file.description ? `<br><small>${file.description}</small>` : ''}
                 </li>
             `;
         });
-        html += '</ul></div>';
+        
+        html += '</ul>';
+        
+        if (hasMore) {
+            html += `
+                <button onclick="toggleDetails('${fileId}')" id="btn_${fileId}" 
+                    style="margin-top: 0.5rem; padding: 0.4rem 1rem; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                    Show ${data.sensitive_files_found.length - showLimit} More
+                </button>
+            `;
+        }
+        
+        html += '</div>';
     }
     
     // Admin Panels Found
@@ -321,6 +406,11 @@ function showAlert(message, type) {
 
 function downloadReport() {
     if (currentScanId) {
+        const downloadBtn = document.getElementById('downloadBtn');
+        if (downloadBtn && downloadBtn.disabled) {
+            showAlert('PDF report is not available for this scan.', 'error');
+            return;
+        }
         window.location.href = `${API_BASE_URL}/api/report/${currentScanId}`;
     }
 }
@@ -340,6 +430,49 @@ function scrollToScan() {
 
 function scrollToFeatures() {
     document.getElementById('features').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Show all category sections
+function showAllCategories() {
+    const hiddenCategories = document.querySelectorAll('.hidden-category');
+    const readMoreBtn = document.getElementById('readMoreBtn');
+    
+    hiddenCategories.forEach(category => {
+        category.style.display = 'block';
+        category.style.animation = 'fadeIn 0.3s ease-in';
+    });
+    
+    if (readMoreBtn) {
+        readMoreBtn.style.display = 'none';
+    }
+}
+
+// Toggle details for issues/vulnerabilities within a category
+function toggleDetails(parentId) {
+    const hiddenItems = document.querySelectorAll(`[data-parent="${parentId}"]`);
+    const button = document.getElementById(`btn_${parentId}`);
+    
+    if (!button) return;
+    
+    const isExpanded = button.textContent.includes('Show Less');
+    
+    hiddenItems.forEach(item => {
+        if (isExpanded) {
+            item.style.display = 'none';
+        } else {
+            item.style.display = 'list-item';
+            item.style.animation = 'fadeIn 0.2s ease-in';
+        }
+    });
+    
+    if (isExpanded) {
+        const hiddenCount = hiddenItems.length;
+        button.textContent = `Show ${hiddenCount} More`;
+        button.style.background = '#3498db';
+    } else {
+        button.textContent = 'Show Less';
+        button.style.background = '#95a5a6';
+    }
 }
 
 // Smooth scrolling for navigation links

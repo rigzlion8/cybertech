@@ -269,6 +269,22 @@ class ReportGenerator:
         if 'database' in results:
             elements.extend(self._create_database_section(results['database'], styles))
         
+        # SQL Injection Results
+        if 'sql_injection' in results:
+            elements.extend(self._create_sql_injection_section(results['sql_injection'], styles))
+        
+        # XSS Results
+        if 'xss' in results:
+            elements.extend(self._create_xss_section(results['xss'], styles))
+        
+        # Quick Wins Results
+        if 'quick_wins' in results:
+            elements.extend(self._create_quick_wins_section(results['quick_wins'], styles))
+        
+        # Directory Enumeration Results
+        if 'directory_enum' in results:
+            elements.extend(self._create_directory_enum_section(results['directory_enum'], styles))
+        
         return elements
     
     def _create_port_scan_section(self, port_results, styles):
@@ -512,6 +528,147 @@ class ReportGenerator:
         ]
         
         return recommendations
+    
+    def _create_sql_injection_section(self, sqli_results, styles):
+        """Create SQL injection findings section"""
+        elements = []
+        
+        elements.append(Paragraph("SQL Injection Assessment", styles['Heading3']))
+        elements.append(Spacer(1, 0.1 * inch))
+        
+        vulnerabilities = sqli_results.get('vulnerabilities', [])
+        
+        if vulnerabilities:
+            elements.append(Paragraph(
+                f"⚠ CRITICAL: Found {len(vulnerabilities)} SQL injection vulnerabilities!",
+                styles['Normal']
+            ))
+            elements.append(Spacer(1, 0.1 * inch))
+            
+            for vuln in vulnerabilities[:10]:  # Limit to 10 for PDF
+                vuln_text = f"""
+                <b>Type:</b> {vuln.get('type', 'Unknown')}<br/>
+                <b>Severity:</b> <font color="red">{vuln.get('severity', 'HIGH')}</font><br/>
+                <b>Parameter:</b> {vuln.get('parameter', 'Unknown')}<br/>
+                <b>Description:</b> {vuln.get('description', 'No description')}
+                """
+                elements.append(Paragraph(vuln_text, styles['Normal']))
+                elements.append(Spacer(1, 0.1 * inch))
+        else:
+            elements.append(Paragraph("No SQL injection vulnerabilities detected.", styles['Normal']))
+        
+        elements.append(Spacer(1, 0.2 * inch))
+        return elements
+    
+    def _create_xss_section(self, xss_results, styles):
+        """Create XSS findings section"""
+        elements = []
+        
+        elements.append(Paragraph("Cross-Site Scripting (XSS) Assessment", styles['Heading3']))
+        elements.append(Spacer(1, 0.1 * inch))
+        
+        vulnerabilities = xss_results.get('vulnerabilities', [])
+        
+        if vulnerabilities:
+            elements.append(Paragraph(
+                f"⚠ Found {len(vulnerabilities)} XSS vulnerabilities!",
+                styles['Normal']
+            ))
+            elements.append(Spacer(1, 0.1 * inch))
+            
+            for vuln in vulnerabilities[:10]:  # Limit to 10 for PDF
+                severity_color = self._get_severity_color(vuln.get('severity', 'HIGH'))
+                vuln_text = f"""
+                <b>Type:</b> {vuln.get('type', 'Unknown')}<br/>
+                <b>Severity:</b> <font color="{severity_color}">{vuln.get('severity', 'HIGH')}</font><br/>
+                <b>Parameter:</b> {vuln.get('parameter', 'Unknown')}<br/>
+                <b>Context:</b> {vuln.get('context', 'Unknown')}<br/>
+                <b>Description:</b> {vuln.get('description', 'No description')}
+                """
+                elements.append(Paragraph(vuln_text, styles['Normal']))
+                elements.append(Spacer(1, 0.1 * inch))
+        else:
+            elements.append(Paragraph("No XSS vulnerabilities detected.", styles['Normal']))
+        
+        elements.append(Spacer(1, 0.2 * inch))
+        return elements
+    
+    def _create_quick_wins_section(self, quick_wins_results, styles):
+        """Create quick wins findings section"""
+        elements = []
+        
+        elements.append(Paragraph("Security Best Practices", styles['Heading3']))
+        elements.append(Spacer(1, 0.1 * inch))
+        
+        issues = quick_wins_results.get('issues', [])
+        
+        if issues:
+            for issue in issues:
+                severity_color = self._get_severity_color(issue.get('severity', 'MEDIUM'))
+                issue_text = f"""
+                <b>Type:</b> {issue.get('type', 'Unknown')}<br/>
+                <b>Severity:</b> <font color="{severity_color}">{issue.get('severity', 'MEDIUM')}</font><br/>
+                <b>Description:</b> {issue.get('description', 'No description')}
+                """
+                elements.append(Paragraph(issue_text, styles['Normal']))
+                elements.append(Spacer(1, 0.1 * inch))
+        else:
+            elements.append(Paragraph("All security best practices checks passed.", styles['Normal']))
+        
+        elements.append(Spacer(1, 0.2 * inch))
+        return elements
+    
+    def _create_directory_enum_section(self, dir_enum_results, styles):
+        """Create directory enumeration findings section"""
+        elements = []
+        
+        elements.append(Paragraph("Directory & File Enumeration", styles['Heading3']))
+        elements.append(Spacer(1, 0.1 * inch))
+        
+        sensitive_files = dir_enum_results.get('sensitive_files_found', [])
+        admin_panels = dir_enum_results.get('admin_panels_found', [])
+        
+        if sensitive_files:
+            elements.append(Paragraph(
+                f"⚠ Found {len(sensitive_files)} sensitive files exposed:",
+                styles['Normal']
+            ))
+            elements.append(Spacer(1, 0.1 * inch))
+            
+            for file in sensitive_files[:10]:  # Limit to 10
+                severity_color = self._get_severity_color(file.get('severity', 'HIGH'))
+                file_text = f"""
+                <b>File:</b> {file.get('path', 'Unknown')}<br/>
+                <b>Severity:</b> <font color="{severity_color}">{file.get('severity', 'HIGH')}</font><br/>
+                <b>Description:</b> {file.get('description', 'Exposed file')}
+                """
+                elements.append(Paragraph(file_text, styles['Normal']))
+                elements.append(Spacer(1, 0.05 * inch))
+        
+        if admin_panels:
+            elements.append(Spacer(1, 0.1 * inch))
+            elements.append(Paragraph(
+                f"⚠ Found {len(admin_panels)} admin panel(s) accessible:",
+                styles['Normal']
+            ))
+            elements.append(Spacer(1, 0.1 * inch))
+            
+            for panel in admin_panels:
+                panel_text = f"""
+                <b>Path:</b> {panel.get('path', 'Unknown')}<br/>
+                <b>Severity:</b> <font color="darkorange">HIGH</font>
+                """
+                elements.append(Paragraph(panel_text, styles['Normal']))
+                elements.append(Spacer(1, 0.05 * inch))
+        
+        if not sensitive_files and not admin_panels:
+            elements.append(Paragraph(
+                "No sensitive files or admin panels exposed.",
+                styles['Normal']
+            ))
+        
+        elements.append(Spacer(1, 0.2 * inch))
+        return elements
     
     def _get_risk_color(self, risk_level):
         """Get color for risk level"""

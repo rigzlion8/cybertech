@@ -368,6 +368,29 @@ body {
     100% { transform: rotate(360deg); }
 }
 
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Read More Button Styling */
+button[id^="readMoreBtn"],
+button[id^="btn_"] {
+    transition: all 0.3s ease;
+}
+
+button[id^="readMoreBtn"]:hover,
+button[id^="btn_"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+}
+
 /* Results */
 .results-container {
     margin-top: 3rem;

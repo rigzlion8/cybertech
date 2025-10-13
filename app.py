@@ -107,34 +107,50 @@ def perform_scan():
         
         # Perform scan
         scan_results = scanner.scan()
-        
-        # Generate report
-        report_gen = ReportGenerator(scan_results)
-        report_path = report_gen.generate_pdf_report()
         scan_id = scan_results.get('scan_id')
         
+        # Generate report
+        report_path = None
+        try:
+            logger.info(f"Generating PDF report for scan {scan_id}")
+            report_gen = ReportGenerator(scan_results)
+            report_path = report_gen.generate_pdf_report()
+            logger.info(f"PDF report generated successfully: {report_path}")
+        except Exception as e:
+            logger.error(f"Failed to generate PDF report: {str(e)}", exc_info=True)
+            # Continue even if PDF generation fails
+        
         # Send email if provided
-        if email:
+        email_result = {'success': False}
+        if email and report_path:
             logger.info(f"Sending report to: {email}")
-            email_sender = EmailSender()
-            email_result = email_sender.send_report(
-                recipient=email,
-                report_path=report_path,
-                scan_results=scan_results
-            )
-            
-            if not email_result['success']:
-                logger.warning(f"Failed to send email: {email_result.get('error')}")
+            try:
+                email_sender = EmailSender()
+                email_result = email_sender.send_report(
+                    recipient=email,
+                    report_path=report_path,
+                    scan_results=scan_results
+                )
+                
+                if not email_result['success']:
+                    logger.warning(f"Failed to send email: {email_result.get('error')}")
+            except Exception as e:
+                logger.error(f"Email sending error: {str(e)}")
         
         # Save scan to storage
-        scan_storage.save_scan(scan_results)
+        try:
+            scan_storage.save_scan(scan_results)
+            logger.info(f"Scan {scan_id} saved to storage")
+        except Exception as e:
+            logger.error(f"Failed to save scan to storage: {str(e)}")
         
         return jsonify({
             'status': 'success',
             'scan_id': scan_id,
             'results': scan_results,
-            'report_url': f'/api/report/{scan_id}',
-            'email_sent': bool(email and email_result.get('success')),
+            'report_url': f'/api/report/{scan_id}' if report_path else None,
+            'report_available': bool(report_path),
+            'email_sent': email_result.get('success', False),
             'timestamp': datetime.utcnow().isoformat()
         }), 200
         
