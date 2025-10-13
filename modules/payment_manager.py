@@ -60,17 +60,35 @@ class PaymentManager:
         Args:
             mongodb_storage: MongoDBStorage instance (optional)
         """
-        if mongodb_storage:
-            self.db = mongodb_storage.db
-        else:
-            # Connect to MongoDB
-            connection_string = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
-            client = MongoClient(connection_string)
-            self.db = client[os.getenv('MONGODB_DB_NAME', 'cybertech')]
+        self.db = None
+        self.payments_collection = None
+        self.subscriptions_collection = None
         
-        self.payments_collection = self.db['payments']
-        self.subscriptions_collection = self.db['subscriptions']
-        self._ensure_indexes()
+        try:
+            if mongodb_storage:
+                self.db = mongodb_storage.db
+            else:
+                # Connect to MongoDB with timeout
+                connection_string = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
+                client = MongoClient(
+                    connection_string,
+                    serverSelectionTimeoutMS=5000,  # 5 second timeout
+                    connectTimeoutMS=5000,
+                    socketTimeoutMS=5000
+                )
+                # Test connection
+                client.admin.command('ping')
+                self.db = client[os.getenv('MONGODB_DB_NAME', 'cybertech')]
+            
+            if self.db:
+                self.payments_collection = self.db['payments']
+                self.subscriptions_collection = self.db['subscriptions']
+                self._ensure_indexes()
+                logger.info("Payment manager initialized with MongoDB")
+        except Exception as e:
+            logger.warning(f"Failed to connect to MongoDB for payments: {e}")
+            logger.warning("Payment tracking will be disabled. Set MONGODB_URI to enable payments.")
+            self.db = None
     
     def _ensure_indexes(self):
         """Create necessary indexes"""
@@ -100,6 +118,10 @@ class PaymentManager:
         Returns:
             bool: True if created successfully
         """
+        if not self.payments_collection:
+            logger.warning("Payment collection not available. Cannot create payment record.")
+            return False
+            
         try:
             payment_doc = {
                 'checkout_request_id': payment_data.get('checkout_request_id'),
@@ -234,6 +256,10 @@ class PaymentManager:
         Returns:
             bool: True if has active subscription
         """
+        if not self.subscriptions_collection:
+            logger.warning("Subscription collection not available")
+            return False
+            
         try:
             subscription = self.subscriptions_collection.find_one({
                 'phone_number': phone_number,
@@ -284,6 +310,10 @@ class PaymentManager:
         Returns:
             bool: True if paid
         """
+        if not self.payments_collection:
+            logger.warning("Payment collection not available. Cannot check payment status.")
+            return False
+            
         try:
             # Check for active subscription (includes all features)
             if self.has_active_subscription(phone_number):
