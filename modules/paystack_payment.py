@@ -34,7 +34,7 @@ class PaystackPayment:
         
         Args:
             email: Customer email address
-            amount: Amount in kobo (100 = 1 KSH, so multiply by 100)
+            amount: Amount in KES (will be converted to kobo)
             reference: Unique transaction reference
             metadata: Additional transaction data
             
@@ -46,6 +46,14 @@ class PaystackPayment:
                 return {
                     'success': False,
                     'error': 'Paystack not configured'
+                }
+            
+            # Enforce minimum $1 (approximately 130 KSH)
+            min_amount = 100  # 100 KSH minimum for reports
+            if amount < min_amount:
+                return {
+                    'success': False,
+                    'error': f'Minimum payment amount is {min_amount} KSH'
                 }
             
             headers = {

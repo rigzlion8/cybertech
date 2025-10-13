@@ -363,39 +363,81 @@
             
             <div id="paymentStatus" class="payment-status" style="display: none;"></div>
             
-            <form id="subscriptionForm">
+            <h4 style="margin-bottom: 1rem; color: #2c3e50;">Choose Payment Method:</h4>
+            
+            <!-- M-Pesa Option -->
+            <div style="background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem;" onclick="selectSubPaymentMethod('mpesa')">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <span style="font-size: 2rem;">📱</span>
+                        <div>
+                            <div style="font-weight: 700; font-size: 1.1rem;">Pay via M-Pesa</div>
+                            <div style="font-size: 0.9rem; opacity: 0.9;">Recommended for Kenyan users</div>
+                        </div>
+                    </div>
+                    <span style="font-size: 1.5rem;">→</span>
+                </div>
+            </div>
+            
+            <div id="mpesaSubForm" style="display: none; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; margin-bottom: 1rem;">
                 <div class="form-group">
                     <label for="phoneNumber">M-Pesa Phone Number</label>
                     <input 
                         type="tel" 
                         id="phoneNumber" 
-                        name="phoneNumber" 
                         placeholder="0712345678 or 254712345678"
-                        required
-                        pattern="[0-9+]+"
+                        style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px;"
                     >
-                    <small style="color: var(--text-light);">Enter your Safaricom number</small>
                 </div>
-                
-                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <strong>What happens next:</strong>
-                    <ol style="margin: 0.5rem 0 0 1.5rem; color: var(--text-light);">
-                        <li>You'll receive an M-Pesa prompt on your phone</li>
-                        <li>Enter your M-Pesa PIN to complete payment</li>
-                        <li>Your subscription activates immediately</li>
-                        <li>Enjoy unlimited scans for 30 days!</li>
-                    </ol>
+                <button onclick="processSubscription('mpesa')" class="btn btn-primary" id="mpesaSubBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
+                    💳 Pay 2,000 KSH via M-Pesa
+                </button>
+                <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">You'll receive an STK push on your phone</p>
+            </div>
+            
+            <!-- Paystack Option -->
+            <div style="background: #3498db; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem;" onclick="selectSubPaymentMethod('paystack')">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <span style="font-size: 2rem;">💳</span>
+                        <div>
+                            <div style="font-weight: 700; font-size: 1.1rem;">Pay via Card (Paystack)</div>
+                            <div style="font-size: 0.9rem; opacity: 0.9;">Visa, Mastercard, International</div>
+                        </div>
+                    </div>
+                    <span style="font-size: 1.5rem;">→</span>
                 </div>
-                
-                <div style="display: flex; gap: 1rem;">
-                    <button type="submit" class="btn btn-primary" style="flex: 1;">
-                        Pay 2,000 KSH via M-Pesa
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="closeSubscriptionModal()">
-                        Cancel
-                    </button>
+            </div>
+            
+            <div id="paystackSubForm" style="display: none; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; margin-bottom: 1rem;">
+                <div class="form-group">
+                    <label for="subEmail">Email Address</label>
+                    <input 
+                        type="email" 
+                        id="subEmail" 
+                        placeholder="your@email.com"
+                        style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px;"
+                    >
                 </div>
-            </form>
+                <button onclick="processSubscription('paystack')" class="btn btn-primary" id="paystackSubBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem; background: #3498db;">
+                    💳 Pay with Card
+                </button>
+                <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">Secure payment via Paystack</p>
+            </div>
+            
+            <div style="background: #fff3cd; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                <strong>What happens next:</strong>
+                <ol style="margin: 0.5rem 0 0 1.5rem; color: var(--text-light);">
+                    <li>Complete payment securely</li>
+                    <li>Your subscription activates immediately</li>
+                    <li>Enjoy unlimited scans for 30 days!</li>
+                    <li>Access all premium features instantly</li>
+                </ol>
+            </div>
+            
+            <div style="text-align: center;">
+                <button type="button" class="btn btn-secondary" onclick="closeSubscriptionModal()">Cancel</button>
+            </div>
         </div>
     </div>
 

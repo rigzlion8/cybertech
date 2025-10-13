@@ -127,32 +127,107 @@ function displayResults(results) {
     
     scanDuration.textContent = `${results.duration.toFixed(2)}s`;
     
-    // Build detailed results
-    let detailsHTML = '<h4 style="margin-bottom: 1rem;">Detailed Findings</h4>';
+    // Build detailed results - Show only 2 critical issues preview
+    let detailsHTML = '<h4 style="margin-bottom: 1rem;">Critical Issues Found</h4>';
     
     const scanResults = results.results || {};
-    const categories = Object.entries(scanResults).filter(([_, data]) => typeof data === 'object');
-    const showLimit = 3;
-    const hasMoreCategories = categories.length > showLimit;
     
-    categories.forEach(([category, categoryResults], index) => {
-        const isHidden = index >= showLimit;
-        const hiddenClass = isHidden ? 'hidden-category' : '';
-        const hiddenStyle = isHidden ? 'display: none;' : '';
-        
-        detailsHTML += `<div class="${hiddenClass}" data-category="hidden" style="${hiddenStyle}">`;
-        detailsHTML += buildCategorySection(category, categoryResults);
+    // Collect all critical/high severity issues
+    const criticalIssues = [];
+    for (const [category, categoryResults] of Object.entries(scanResults)) {
+        if (typeof categoryResults === 'object') {
+            // Check vulnerabilities
+            if (categoryResults.vulnerabilities && Array.isArray(categoryResults.vulnerabilities)) {
+                categoryResults.vulnerabilities.forEach(vuln => {
+                    if (vuln.severity === 'CRITICAL' || vuln.severity === 'HIGH') {
+                        criticalIssues.push({
+                            category: category,
+                            type: vuln.type || 'Security Issue',
+                            severity: vuln.severity,
+                            description: vuln.description || 'Critical vulnerability detected'
+                        });
+                    }
+                });
+            }
+            
+            // Check issues
+            if (categoryResults.issues && Array.isArray(categoryResults.issues)) {
+                categoryResults.issues.forEach(issue => {
+                    if (issue.severity === 'CRITICAL' || issue.severity === 'HIGH') {
+                        criticalIssues.push({
+                            category: category,
+                            type: issue.type || 'Security Issue',
+                            severity: issue.severity,
+                            description: issue.description || issue.issue || 'Security issue detected'
+                        });
+                    }
+                });
+            }
+            
+            // Check sensitive files
+            if (categoryResults.sensitive_files_found && Array.isArray(categoryResults.sensitive_files_found)) {
+                categoryResults.sensitive_files_found.slice(0, 2).forEach(file => {
+                    if (file.severity === 'CRITICAL' || file.severity === 'HIGH') {
+                        criticalIssues.push({
+                            category: 'directory_enum',
+                            type: file.type || 'Exposed File',
+                            severity: file.severity,
+                            description: file.description || `Exposed file: ${file.path}`
+                        });
+                    }
+                });
+            }
+        }
+    }
+    
+    // Show only top 2 critical issues
+    if (criticalIssues.length > 0) {
+        detailsHTML += '<div style="background: #fff3cd; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; border-left: 4px solid #f39c12;">';
+        detailsHTML += '<p style="margin: 0; font-weight: 600; color: #856404;">⚠️ We found critical security vulnerabilities in your website!</p>';
         detailsHTML += '</div>';
-    });
-    
-    // Add "Read More" button if there are more than 3 categories
-    if (hasMoreCategories) {
+        
+        const issuesToShow = criticalIssues.slice(0, 2);
+        
+        issuesToShow.forEach((issue, index) => {
+            const severityColor = getSeverityColor(issue.severity);
+            detailsHTML += `
+                <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid ${severityColor};">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span style="background: ${severityColor}; color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.85rem; font-weight: bold;">
+                            ${issue.severity}
+                        </span>
+                        <strong style="color: #2c3e50; font-size: 1.1rem;">${issue.type}</strong>
+                    </div>
+                    <p style="margin: 0; color: #555;">${issue.description}</p>
+                </div>
+            `;
+        });
+        
+        if (criticalIssues.length > 2) {
+            detailsHTML += `
+                <div style="background: #e74c3c; color: white; padding: 1rem; border-radius: 8px; text-align: center; margin-top: 1.5rem;">
+                    <strong>+ ${criticalIssues.length - 2} more critical issues found!</strong>
+                </div>
+            `;
+        }
+        
         detailsHTML += `
-            <div style="text-align: center; margin-top: 1.5rem;">
-                <button onclick="showAllCategories()" id="readMoreBtn" 
-                    style="padding: 0.75rem 2rem; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3); transition: all 0.3s ease;">
-                    📋 Show ${categories.length - showLimit} More Categories
-                </button>
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem; border-radius: 12px; text-align: center; margin-top: 2rem; color: white;">
+                <h3 style="margin: 0 0 1rem 0; font-size: 1.5rem;">🔒 Get Your Complete Security Report</h3>
+                <p style="margin: 0 0 1.5rem 0; opacity: 0.9;">Download the full PDF report with detailed findings, remediation steps, and security recommendations</p>
+                <ul style="text-align: left; max-width: 400px; margin: 0 auto 1.5rem auto; list-style: none; padding: 0;">
+                    <li style="padding: 0.5rem 0;">✓ Comprehensive vulnerability analysis</li>
+                    <li style="padding: 0.5rem 0;">✓ Step-by-step remediation guide</li>
+                    <li style="padding: 0.5rem 0;">✓ All ${criticalIssues.length} security issues detailed</li>
+                    <li style="padding: 0.5rem 0;">✓ Professional security report</li>
+                </ul>
+            </div>
+        `;
+    } else {
+        detailsHTML += `
+            <div style="background: #d4edda; padding: 1.5rem; border-radius: 8px; text-align: center; color: #155724;">
+                <h3 style="margin: 0 0 0.5rem 0;">✓ Great News!</h3>
+                <p style="margin: 0;">No critical security issues found. Your website appears to be well-protected.</p>
             </div>
         `;
     }
@@ -448,54 +523,112 @@ function showPaymentModal() {
     modal.id = 'paymentModal';
     modal.className = 'modal active';
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
-                <h2 class="modal-title">Download Report</h2>
+                <h2 class="modal-title">Download Complete Security Report</h2>
                 <button class="modal-close" onclick="closePaymentModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="paymentStatusDiv" style="display: none; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; text-align: center;"></div>
                 
-                <div style="background: #e3f2fd; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <h3 style="margin: 0 0 1rem 0; color: #1976d2;">💰 Pay 100 KSH via M-Pesa</h3>
-                    <p style="margin: 0; color: #555;">Get instant access to your comprehensive security report</p>
+                <div style="background: #e3f2fd; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; text-align: center;">
+                    <h3 style="margin: 0 0 0.5rem 0; color: #1976d2; font-size: 1.8rem;">100 KSH</h3>
+                    <p style="margin: 0; color: #555; font-size: 0.95rem;">One-time payment for full report access</p>
                 </div>
                 
-                <div class="form-group">
-                    <label for="paymentPhone">M-Pesa Phone Number</label>
-                    <input 
-                        type="tel" 
-                        id="paymentPhone" 
-                        placeholder="0712345678 or 254712345678"
-                        style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;"
-                        required
-                    >
+                <h4 style="margin-bottom: 1rem; color: #2c3e50;">Choose Payment Method:</h4>
+                
+                <!-- M-Pesa Option -->
+                <div id="mpesaSection" style="margin-bottom: 1.5rem;">
+                    <div style="background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem; transition: all 0.3s;" onclick="selectPaymentMethod('mpesa')">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <span style="font-size: 2rem;">📱</span>
+                                <div>
+                                    <div style="font-weight: 700; font-size: 1.1rem;">Pay via M-Pesa</div>
+                                    <div style="font-size: 0.9rem; opacity: 0.9;">Recommended for Kenyan users</div>
+                                </div>
+                            </div>
+                            <span style="font-size: 1.5rem;">→</span>
+                        </div>
+                    </div>
+                    
+                    <div id="mpesaForm" style="display: none; padding: 1.5rem; background: #f8f9fa; border-radius: 8px;">
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label for="paymentPhone" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">M-Pesa Phone Number</label>
+                            <input 
+                                type="tel" 
+                                id="paymentPhone" 
+                                placeholder="0712345678 or 254712345678"
+                                style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;"
+                            >
+                        </div>
+                        <button onclick="processPayment('mpesa')" class="btn btn-primary" id="mpesaPayBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
+                            💳 Pay 100 KSH via M-Pesa
+                        </button>
+                        <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">You'll receive an STK push to complete payment</p>
+                    </div>
                 </div>
                 
-                <div style="background: #fff3cd; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-                    <strong>Or upgrade to Professional:</strong>
-                    <p style="margin: 0.5rem 0;">Get unlimited reports + advanced scans for 2,000 KSH/month</p>
-                    <a href="/pricing" style="color: #3498db; font-weight: 600;">View Pricing →</a>
+                <!-- Paystack Option -->
+                <div id="paystackSection">
+                    <div style="background: #3498db; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem; transition: all 0.3s;" onclick="selectPaymentMethod('paystack')">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <span style="font-size: 2rem;">💳</span>
+                                <div>
+                                    <div style="font-weight: 700; font-size: 1.1rem;">Pay via Card (Paystack)</div>
+                                    <div style="font-size: 0.9rem; opacity: 0.9;">Visa, Mastercard, International</div>
+                                </div>
+                            </div>
+                            <span style="font-size: 1.5rem;">→</span>
+                        </div>
+                    </div>
+                    
+                    <div id="paystackForm" style="display: none; padding: 1.5rem; background: #f8f9fa; border-radius: 8px;">
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label for="paymentEmail" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Email Address</label>
+                            <input 
+                                type="email" 
+                                id="paymentEmail" 
+                                placeholder="your@email.com"
+                                style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;"
+                            >
+                        </div>
+                        <button onclick="processPayment('paystack')" class="btn btn-primary" id="paystackPayBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem; background: #3498db;">
+                            💳 Pay with Card
+                        </button>
+                        <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">Secure payment via Paystack</p>
+                    </div>
                 </div>
                 
-                <div style="display: flex; gap: 1rem;">
-                    <button onclick="processPayment()" class="btn btn-primary" id="payNowBtn" style="flex: 1;">
-                        Pay 100 KSH Now
-                    </button>
-                    <button onclick="closePaymentModal()" class="btn btn-secondary">
-                        Cancel
-                    </button>
+                <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #ddd;">
+                
+                <div style="background: #fff3cd; padding: 1.2rem; border-radius: 8px; text-align: center;">
+                    <strong style="color: #856404;">💎 Upgrade to Professional</strong>
+                    <p style="margin: 0.5rem 0; color: #856404;">Get unlimited reports + advanced scans for 2,000 KSH/month</p>
+                    <a href="/pricing" style="color: #3498db; font-weight: 600; text-decoration: none;">View Pricing →</a>
                 </div>
             </div>
         </div>
     `;
     
     document.body.appendChild(modal);
+}
+
+function selectPaymentMethod(method) {
+    // Hide all forms
+    document.getElementById('mpesaForm').style.display = 'none';
+    document.getElementById('paystackForm').style.display = 'none';
     
-    // Focus on phone input
-    setTimeout(() => {
-        document.getElementById('paymentPhone').focus();
-    }, 100);
+    // Show selected form
+    if (method === 'mpesa') {
+        document.getElementById('mpesaForm').style.display = 'block';
+        setTimeout(() => document.getElementById('paymentPhone').focus(), 100);
+    } else if (method === 'paystack') {
+        document.getElementById('paystackForm').style.display = 'block';
+        setTimeout(() => document.getElementById('paymentEmail').focus(), 100);
+    }
 }
 
 function closePaymentModal() {
@@ -510,14 +643,26 @@ function closePaymentModal() {
     }
 }
 
-async function processPayment() {
-    const phoneNumber = document.getElementById('paymentPhone').value;
+async function processPayment(method) {
     const statusDiv = document.getElementById('paymentStatusDiv');
-    const payBtn = document.getElementById('payNowBtn');
+    let payBtn, identifier;
     
-    if (!phoneNumber) {
-        showAlert('Please enter your M-Pesa phone number', 'error');
-        return;
+    if (method === 'mpesa') {
+        identifier = document.getElementById('paymentPhone').value;
+        payBtn = document.getElementById('mpesaPayBtn');
+        
+        if (!identifier) {
+            showAlert('Please enter your M-Pesa phone number', 'error');
+            return;
+        }
+    } else if (method === 'paystack') {
+        identifier = document.getElementById('paymentEmail').value;
+        payBtn = document.getElementById('paystackPayBtn');
+        
+        if (!identifier) {
+            showAlert('Please enter your email address', 'error');
+            return;
+        }
     }
     
     statusDiv.style.display = 'block';
@@ -527,16 +672,35 @@ async function processPayment() {
     payBtn.disabled = true;
     
     try {
-        const response = await fetch(`${API_BASE_URL}/api/payment/initiate-report`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                phone_number: phoneNumber,
-                scan_id: currentScanId
-            })
-        });
+        let response;
+        
+        if (method === 'mpesa') {
+            // M-Pesa payment
+            response = await fetch(`${API_BASE_URL}/api/payment/initiate-report`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    phone_number: identifier,
+                    scan_id: currentScanId
+                })
+            });
+        } else if (method === 'paystack') {
+            // Paystack payment
+            response = await fetch(`${API_BASE_URL}/api/payment/paystack/initialize`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: identifier,
+                    amount: 100,
+                    type: 'report',
+                    scan_id: currentScanId
+                })
+            });
+        }
         
         const data = await response.json();
         
@@ -547,24 +711,39 @@ async function processPayment() {
                 statusDiv.textContent = '✓ Already paid! Downloading...';
                 
                 setTimeout(() => {
-                    window.location.href = `${API_BASE_URL}/api/report/${currentScanId}?phone=${phoneNumber}`;
+                    window.location.href = `${API_BASE_URL}/api/report/${currentScanId}?phone=${identifier}`;
                     closePaymentModal();
                 }, 1000);
                 return;
             }
             
-            const checkoutId = data.checkout_request_id;
-            
-            statusDiv.style.background = '#e3f2fd';
-            statusDiv.style.color = '#1976d2';
-            statusDiv.innerHTML = `
-                <div>📱 Check your phone for M-Pesa prompt</div>
-                <div style="margin-top: 0.5rem; font-size: 0.9rem;">Enter your PIN to complete payment</div>
-                <div class="loading-spinner" style="margin: 1rem auto;"></div>
-            `;
-            
-            // Start checking payment status
-            startPaymentStatusCheck(checkoutId, phoneNumber);
+            if (method === 'mpesa') {
+                // M-Pesa flow: STK Push
+                const checkoutId = data.checkout_request_id;
+                
+                statusDiv.style.background = '#e3f2fd';
+                statusDiv.style.color = '#1976d2';
+                statusDiv.innerHTML = `
+                    <div>📱 Check your phone for M-Pesa prompt</div>
+                    <div style="margin-top: 0.5rem; font-size: 0.9rem;">Enter your PIN to complete payment</div>
+                    <div class="loading-spinner" style="margin: 1rem auto;"></div>
+                `;
+                
+                // Start checking payment status
+                startPaymentStatusCheck(checkoutId, identifier);
+                
+            } else if (method === 'paystack') {
+                // Paystack flow: Redirect to payment page
+                const authUrl = data.authorization_url;
+                
+                statusDiv.style.background = '#e3f2fd';
+                statusDiv.style.color = '#1976d2';
+                statusDiv.textContent = 'Redirecting to secure payment page...';
+                
+                setTimeout(() => {
+                    window.location.href = authUrl;
+                }, 1000);
+            }
             
         } else {
             statusDiv.style.background = '#f8d7da';
