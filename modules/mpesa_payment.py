@@ -279,8 +279,11 @@ class MPesaPayment:
                 # Payment failed or cancelled
                 return {
                     'success': False,
+                    'merchant_request_id': stk_callback.get('MerchantRequestID'),
+                    'checkout_request_id': stk_callback.get('CheckoutRequestID'),
                     'result_code': result_code,
-                    'result_desc': stk_callback.get('ResultDesc')
+                    'result_desc': stk_callback.get('ResultDesc'),
+                    'error_message': stk_callback.get('ResultDesc')
                 }
             
         except Exception as e:

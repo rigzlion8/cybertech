@@ -154,14 +154,35 @@ class PaymentManager:
         Returns:
             bool: True if updated successfully
         """
+        if not self.payments_collection:
+            logger.warning("Payment collection not available")
+            return False
+            
         try:
+            # Determine status based on M-Pesa result code
+            if callback_data.get('success'):
+                status = 'completed'
+            else:
+                result_code = callback_data.get('result_code', 0)
+                # Result code 1032 = User cancelled (wrong PIN, etc.)
+                # Result code 1 = Insufficient funds
+                # Other codes = Failed
+                if result_code == 1032:
+                    status = 'cancelled'
+                else:
+                    status = 'failed'
+            
             update_data = {
-                'status': 'completed' if callback_data.get('success') else 'failed',
+                'status': status,
                 'mpesa_receipt': callback_data.get('mpesa_receipt'),
                 'transaction_date': callback_data.get('transaction_date'),
+                'result_code': callback_data.get('result_code'),
+                'result_desc': callback_data.get('result_desc'),
                 'updated_at': datetime.utcnow(),
                 'callback_data': callback_data
             }
+            
+            logger.info(f"Updating payment {checkout_request_id} to status: {status}")
             
             result = self.payments_collection.update_one(
                 {'checkout_request_id': checkout_request_id},

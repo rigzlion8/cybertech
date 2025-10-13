@@ -820,18 +820,31 @@ async function processPayment(method) {
 
 function startPaymentStatusCheck(checkoutId, phoneNumber) {
     let attempts = 0;
-    const maxAttempts = 60;
+    const maxAttempts = 60; // 2 minutes total (60 * 2 seconds)
+    
+    console.log(`Starting payment status check for ${checkoutId}`);
     
     window.paymentStatusInterval = setInterval(async () => {
         attempts++;
+        console.log(`Payment status check attempt ${attempts}/${maxAttempts}`);
         
         if (attempts > maxAttempts) {
             clearInterval(window.paymentStatusInterval);
             const statusDiv = document.getElementById('paymentStatusDiv');
+            const mpesaBtn = document.getElementById('mpesaPayBtn');
+            
             statusDiv.style.background = '#f8d7da';
             statusDiv.style.color = '#721c24';
-            statusDiv.textContent = 'Payment timeout. Please try again.';
-            document.getElementById('payNowBtn').disabled = false;
+            statusDiv.innerHTML = `
+                <div>⏱️ Payment Timeout</div>
+                <div style="margin-top: 0.5rem;">Payment request expired. Please try again.</div>
+                <button onclick="closePaymentModal(); setTimeout(() => document.getElementById('downloadBtn').click(), 500);" 
+                        style="margin-top: 1rem; padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    Try Again
+                </button>
+            `;
+            
+            if (mpesaBtn) mpesaBtn.disabled = false;
             return;
         }
         
@@ -839,12 +852,16 @@ function startPaymentStatusCheck(checkoutId, phoneNumber) {
             const response = await fetch(`${API_BASE_URL}/api/payment/status/${checkoutId}`);
             const data = await response.json();
             
+            console.log('Payment status response:', data);
+            
             if (data.status === 'success' && data.payment.found) {
                 const paymentStatus = data.payment.status;
                 const statusDiv = document.getElementById('paymentStatusDiv');
+                const mpesaBtn = document.getElementById('mpesaPayBtn');
                 
                 if (paymentStatus === 'completed') {
                     clearInterval(window.paymentStatusInterval);
+                    console.log('Payment completed successfully!');
                     
                     statusDiv.style.background = '#d4edda';
                     statusDiv.style.color = '#155724';
@@ -860,21 +877,35 @@ function startPaymentStatusCheck(checkoutId, phoneNumber) {
                         setTimeout(() => closePaymentModal(), 1000);
                     }, 1000);
                     
-                } else if (paymentStatus === 'failed') {
+                } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
                     clearInterval(window.paymentStatusInterval);
+                    console.log('Payment failed or cancelled');
                     
                     statusDiv.style.background = '#f8d7da';
                     statusDiv.style.color = '#721c24';
-                    statusDiv.textContent = 'Payment failed or was cancelled. Please try again.';
-                    document.getElementById('payNowBtn').disabled = false;
+                    statusDiv.innerHTML = `
+                        <div>❌ Payment ${paymentStatus === 'cancelled' ? 'Cancelled' : 'Failed'}</div>
+                        <div style="margin-top: 0.5rem;">
+                            ${paymentStatus === 'cancelled' 
+                                ? 'You cancelled the payment. Please try again with correct PIN.' 
+                                : 'Payment was not successful. Please try again.'}
+                        </div>
+                        <button onclick="closePaymentModal(); setTimeout(() => document.getElementById('downloadBtn').click(), 500);" 
+                                style="margin-top: 1rem; padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            Try Again
+                        </button>
+                    `;
+                    
+                    if (mpesaBtn) mpesaBtn.disabled = false;
                 }
             }
             
         } catch (error) {
             console.error('Status check error:', error);
+            // Don't stop polling on network errors, keep trying
         }
         
-    }, 2000);
+    }, 3000); // Check every 3 seconds instead of 2
 }
 
 function openSubscriptionModal() {
