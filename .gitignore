@@ -49,3 +49,5 @@ yarn-error.log*
 frontend/build/
 frontend/dist/
 
+env_production.txt
+.env

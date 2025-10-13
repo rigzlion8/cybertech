@@ -18,6 +18,8 @@ from modules.email_sender import EmailSender
 from modules.scan_storage import ScanStorage
 from modules.mpesa_payment import MPesaPayment
 from modules.payment_manager import PaymentManager
+from modules.resend_email import ResendEmail
+from modules.paystack_payment import PaystackPayment
 
 # Load environment variables
 load_dotenv()
@@ -50,7 +52,11 @@ scan_storage = ScanStorage()
 # Initialize payment systems
 mpesa_environment = os.getenv('MPESA_ENVIRONMENT', 'sandbox')
 mpesa_payment = MPesaPayment(environment=mpesa_environment)
+paystack_payment = PaystackPayment()
 payment_manager = PaymentManager()
+
+# Initialize email system (Resend)
+resend_email = ResendEmail()
 
 
 @app.route('/')
@@ -127,17 +133,30 @@ def perform_scan():
             logger.error(f"Failed to generate PDF report: {str(e)}", exc_info=True)
             # Continue even if PDF generation fails
         
-        # Send email if provided
+        # Send email if provided (using Resend for better delivery)
         email_result = {'success': False}
         if email and report_path:
             logger.info(f"Sending report to: {email}")
             try:
-                email_sender = EmailSender()
-                email_result = email_sender.send_report(
+                # Try Resend first (modern, better delivery)
+                email_result = resend_email.send_report(
                     recipient=email,
                     report_path=report_path,
                     scan_results=scan_results
                 )
+                
+                # Fallback to original EmailSender if Resend fails
+                if not email_result['success']:
+                    logger.warning(f"Resend failed, trying fallback: {email_result.get('error')}")
+                    try:
+                        email_sender = EmailSender()
+                        email_result = email_sender.send_report(
+                            recipient=email,
+                            report_path=report_path,
+                            scan_results=scan_results
+                        )
+                    except:
+                        pass
                 
                 if not email_result['success']:
                     logger.warning(f"Failed to send email: {email_result.get('error')}")
@@ -640,6 +659,138 @@ def check_subscription():
             'status': 'error',
             'error': str(e)
         }), 500
+
+
+@app.route('/api/payment/paystack/initialize', methods=['POST'])
+def initialize_paystack_payment():
+    """
+    Initialize Paystack payment (for international users or card payments)
+    Expected JSON: {"email": "user@example.com", "amount": 100, "type": "report", "scan_id": "abc123"}
+    """
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        amount = data.get('amount', 100)
+        payment_type = data.get('type', 'report')
+        scan_id = data.get('scan_id')
+        
+        if not email:
+            return jsonify({
+                'status': 'error',
+                'error': 'Email address is required'
+            }), 400
+        
+        # Generate reference
+        import uuid
+        reference = f"CYBERTECH-{uuid.uuid4().hex[:12].upper()}"
+        
+        # Initialize Paystack transaction
+        result = paystack_payment.initialize_transaction(
+            email=email,
+            amount=amount,
+            reference=reference,
+            metadata={
+                'payment_type': payment_type,
+                'scan_id': scan_id,
+                'customer_email': email
+            }
+        )
+        
+        if result.get('success'):
+            # Save payment record
+            payment_manager.create_payment_record({
+                'checkout_request_id': reference,
+                'merchant_request_id': reference,
+                'phone_number': email,  # Use email as identifier for Paystack
+                'amount': amount,
+                'payment_type': payment_type,
+                'scan_id': scan_id,
+                'metadata': {'provider': 'paystack', 'reference': reference}
+            })
+            
+            return jsonify({
+                'status': 'success',
+                'authorization_url': result['authorization_url'],
+                'reference': result['reference']
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'error': result.get('error', 'Failed to initialize payment')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error initializing Paystack payment: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/payment/paystack-callback', methods=['GET'])
+def paystack_callback():
+    """
+    Paystack payment callback (redirect after payment)
+    """
+    try:
+        reference = request.args.get('reference')
+        
+        if not reference:
+            return "Payment verification failed", 400
+        
+        # Verify transaction
+        result = paystack_payment.verify_transaction(reference)
+        
+        if result.get('success') and result.get('verified'):
+            # Update payment status
+            payment_manager.update_payment_status(
+                reference,
+                {
+                    'success': True,
+                    'mpesa_receipt': reference,
+                    'transaction_date': result.get('paid_at'),
+                    'amount': result.get('amount')
+                }
+            )
+            
+            # Redirect to success page
+            return f"""
+            <html>
+            <head>
+                <title>Payment Successful</title>
+                <meta http-equiv="refresh" content="3;url=/" />
+                <style>
+                    body {{ font-family: Arial; text-align: center; padding: 50px; }}
+                    .success {{ color: #27ae60; font-size: 24px; }}
+                </style>
+            </head>
+            <body>
+                <div class="success">✓ Payment Successful!</div>
+                <p>Thank you for your payment. Redirecting...</p>
+            </body>
+            </html>
+            """
+        else:
+            return f"""
+            <html>
+            <head>
+                <title>Payment Failed</title>
+                <meta http-equiv="refresh" content="3;url=/pricing" />
+                <style>
+                    body {{ font-family: Arial; text-align: center; padding: 50px; }}
+                    .error {{ color: #e74c3c; font-size: 24px; }}
+                </style>
+            </head>
+            <body>
+                <div class="error">✗ Payment Failed</div>
+                <p>Please try again. Redirecting...</p>
+            </body>
+            </html>
+            """
+            
+    except Exception as e:
+        logger.error(f"Error processing Paystack callback: {str(e)}")
+        return "Error processing payment", 500
 
 
 @app.errorhandler(404)
