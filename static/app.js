@@ -722,35 +722,44 @@ async function processPayment(method) {
     try {
         let response;
         
+        console.log(`Processing ${method} payment for scan ${currentScanId}`);
+        
         if (method === 'mpesa') {
             // M-Pesa payment
+            const payload = {
+                phone_number: identifier,
+                scan_id: currentScanId
+            };
+            console.log('M-Pesa payload:', payload);
+            
             response = await fetch(`${API_BASE_URL}/api/payment/initiate-report`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    phone_number: identifier,
-                    scan_id: currentScanId
-                })
+                body: JSON.stringify(payload)
             });
         } else if (method === 'paystack') {
             // Paystack payment
+            const payload = {
+                email: identifier,
+                amount: 100,
+                type: 'report',
+                scan_id: currentScanId
+            };
+            console.log('Paystack payload:', payload);
+            
             response = await fetch(`${API_BASE_URL}/api/payment/paystack/initialize`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    email: identifier,
-                    amount: 100,
-                    type: 'report',
-                    scan_id: currentScanId
-                })
+                body: JSON.stringify(payload)
             });
         }
         
         const data = await response.json();
+        console.log('Payment response:', data);
         
         if (data.status === 'success') {
             if (data.already_paid) {

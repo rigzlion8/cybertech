@@ -51,3 +51,4 @@ frontend/dist/
 
 env_production.txt
 .env
+start_with_payments.sh

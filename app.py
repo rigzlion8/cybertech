@@ -448,6 +448,27 @@ def pricing_page():
     return send_from_directory('static', 'pricing.html')
 
 
+@app.route('/api/payment/test-config', methods=['GET'])
+def test_payment_config():
+    """Test if payment systems are configured"""
+    try:
+        mpesa_configured = bool(mpesa_payment.consumer_key and mpesa_payment.consumer_secret)
+        paystack_configured = bool(paystack_payment.secret_key)
+        
+        return jsonify({
+            'status': 'success',
+            'mpesa_configured': mpesa_configured,
+            'paystack_configured': paystack_configured,
+            'mpesa_environment': mpesa_payment.environment,
+            'mpesa_shortcode': mpesa_payment.business_short_code
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/payment/initiate-report', methods=['POST'])
 def initiate_report_payment():
     """
@@ -474,12 +495,16 @@ def initiate_report_payment():
             }), 200
         
         # Initiate M-Pesa payment
+        logger.info(f"Initiating M-Pesa payment: phone={phone_number}, amount=100, scan_id={scan_id}")
+        
         result = mpesa_payment.initiate_stk_push(
             phone_number=phone_number,
             amount=100,
             account_reference=f"REPORT-{scan_id}",
             transaction_desc="CyberTech Report Download"
         )
+        
+        logger.info(f"M-Pesa result: {result}")
         
         if result.get('success'):
             # Save payment record
@@ -492,15 +517,19 @@ def initiate_report_payment():
                 'scan_id': scan_id
             })
             
+            logger.info(f"Payment record created for {phone_number}")
+            
             return jsonify({
                 'status': 'success',
                 'checkout_request_id': result['checkout_request_id'],
                 'message': result.get('customer_message', 'Payment request sent to your phone')
             }), 200
         else:
+            logger.error(f"M-Pesa payment failed: {result.get('error')}")
             return jsonify({
                 'status': 'error',
-                'error': result.get('error', 'Failed to initiate payment')
+                'error': result.get('error', 'Failed to initiate payment'),
+                'details': result
             }), 500
             
     except Exception as e:

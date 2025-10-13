@@ -1,0 +1,32 @@
+#!/bin/bash
+# Start the app with payment credentials
+# Copy this to start_with_payments.sh and fill in your actual credentials
+
+cd /home/rigz/projects/cybertech
+
+# Stop any running instances
+pkill -f "python app.py" 2>/dev/null || true
+sleep 2
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Export M-Pesa credentials
+export MPESA_ENVIRONMENT=sandbox
+export MPESA_CONSUMER_KEY=your_consumer_key_here
+export MPESA_CONSUMER_SECRET=your_consumer_secret_here
+export MPESA_SHORTCODE=your_shortcode_here
+export MPESA_PASSKEY=your_passkey_here
+export MPESA_CALLBACK_URL=https://your-domain.com/api/payment/callback
+
+# Export Paystack credentials
+export PAYSTACK_SECRET_KEY=your_paystack_secret_key_here
+export PAYSTACK_PUBLIC_KEY=your_paystack_public_key_here
+
+# Export Resend credentials
+export RESEND_API_KEY=your_resend_api_key_here
+export FROM_EMAIL=noreply@yourdomain.com
+
+echo "🚀 Starting CyberTech with payment systems..."
+python app.py
+
