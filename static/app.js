@@ -165,13 +165,14 @@ function buildCategorySection(category, data) {
     if (data.issues && data.issues.length > 0) {
         html += '<div style="margin-top: 1rem;"><strong>Issues Found:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
         data.issues.forEach(issue => {
-            const severityColor = getSeverityColor(issue.severity);
+            const severity = issue.severity || 'MEDIUM';
+            const severityColor = getSeverityColor(severity);
             html += `
                 <li style="margin-bottom: 0.5rem;">
                     <span style="color: ${severityColor}; font-weight: bold;">
-                        [${issue.severity.toUpperCase()}]
+                        [${severity.toUpperCase()}]
                     </span>
-                    ${issue.description || issue.issue || 'No description'}
+                    ${issue.description || issue.issue || issue.type || 'No description'}
                 </li>
             `;
         });
@@ -182,13 +183,14 @@ function buildCategorySection(category, data) {
     if (data.vulnerabilities && data.vulnerabilities.length > 0) {
         html += '<div style="margin-top: 1rem;"><strong>Vulnerabilities:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
         data.vulnerabilities.forEach(vuln => {
-            const severityColor = getSeverityColor(vuln.severity);
+            const severity = vuln.severity || 'HIGH';
+            const severityColor = getSeverityColor(severity);
             html += `
                 <li style="margin-bottom: 0.5rem;">
                     <span style="color: ${severityColor}; font-weight: bold;">
-                        [${vuln.severity.toUpperCase()}]
+                        [${severity.toUpperCase()}]
                     </span>
-                    ${vuln.type}: ${vuln.description}
+                    ${vuln.type || 'Vulnerability'}: ${vuln.description || 'No description'}
                 </li>
             `;
         });
@@ -213,6 +215,60 @@ function buildCategorySection(category, data) {
         html += '</ul></div>';
     }
     
+    // SQL Injection Points
+    if (data.injection_points && data.injection_points.length > 0) {
+        html += '<div style="margin-top: 1rem;"><strong>Injection Points Found:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
+        data.injection_points.forEach(point => {
+            html += `<li style="color: #e74c3c; font-weight: bold;">⚠️ ${point}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Sensitive Files Found (Directory Enumeration)
+    if (data.sensitive_files_found && data.sensitive_files_found.length > 0) {
+        html += '<div style="margin-top: 1rem;"><strong>Sensitive Files Exposed:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
+        data.sensitive_files_found.forEach(file => {
+            const severity = file.severity || 'HIGH';
+            const severityColor = getSeverityColor(severity);
+            html += `
+                <li style="margin-bottom: 0.5rem;">
+                    <span style="color: ${severityColor}; font-weight: bold;">[${severity}]</span>
+                    ${file.path || file.url || 'Unknown file'}
+                    ${file.description ? `<br><small>${file.description}</small>` : ''}
+                </li>
+            `;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Admin Panels Found
+    if (data.admin_panels_found && data.admin_panels_found.length > 0) {
+        html += '<div style="margin-top: 1rem;"><strong>Admin Panels Discovered:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
+        data.admin_panels_found.forEach(panel => {
+            html += `<li style="color: #e67e22; font-weight: bold;">🔐 ${panel.path || panel.url || 'Unknown path'}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Directories Found
+    if (data.directories_found && data.directories_found.length > 0 && data.directories_found.length <= 10) {
+        html += '<div style="margin-top: 1rem;"><strong>Directories Found:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
+        data.directories_found.forEach(dir => {
+            html += `<li>📁 ${dir.path || dir.url || 'Unknown directory'}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Risk Level Summary
+    if (data.risk_level) {
+        const riskColor = getRiskColor(data.risk_level);
+        html += `
+            <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(${data.risk_level === 'CRITICAL' ? '231, 76, 60' : data.risk_level === 'HIGH' ? '230, 126, 34' : data.risk_level === 'MEDIUM' ? '243, 156, 18' : '39, 174, 96'}, 0.1); border-left: 4px solid ${riskColor}; border-radius: 4px;">
+                <strong>Risk Level:</strong> <span style="color: ${riskColor}; font-weight: bold; font-size: 1.1rem;">${data.risk_level}</span>
+            </div>
+        `;
+    }
+    
     html += '</div>';
     return html;
 }
@@ -235,6 +291,11 @@ function getRiskColor(risk) {
 }
 
 function getSeverityColor(severity) {
+    // Handle undefined, null, or non-string values
+    if (!severity || typeof severity !== 'string') {
+        return '#95a5a6'; // Default gray color
+    }
+    
     const colors = {
         'low': '#3498db',
         'medium': '#f39c12',
