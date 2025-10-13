@@ -439,28 +439,216 @@ async function downloadReport() {
         return;
     }
     
-    try {
-        // First check if report exists
-        const checkUrl = `${API_BASE_URL}/api/report/${currentScanId}`;
-        const response = await fetch(checkUrl, { method: 'HEAD' });
-        
-        if (response.ok) {
-            // Report exists, download it
-            window.location.href = checkUrl;
-        } else {
-            // Report doesn't exist
-            showAlert('PDF report is not yet available. The report may still be generating or generation failed. You can view the results above.', 'error');
-            if (downloadBtn) {
-                downloadBtn.disabled = true;
-                downloadBtn.style.opacity = '0.5';
-                downloadBtn.textContent = '📄 Report Not Available';
-            }
-        }
-    } catch (error) {
-        console.error('Error downloading report:', error);
-        showAlert('Unable to download report. Please try again later or contact support.', 'error');
+    // Show payment modal
+    showPaymentModal();
+}
+
+function showPaymentModal() {
+    const modal = document.createElement('div');
+    modal.id = 'paymentModal';
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Download Report</h2>
+                <button class="modal-close" onclick="closePaymentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="paymentStatusDiv" style="display: none; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; text-align: center;"></div>
+                
+                <div style="background: #e3f2fd; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <h3 style="margin: 0 0 1rem 0; color: #1976d2;">💰 Pay 100 KSH via M-Pesa</h3>
+                    <p style="margin: 0; color: #555;">Get instant access to your comprehensive security report</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="paymentPhone">M-Pesa Phone Number</label>
+                    <input 
+                        type="tel" 
+                        id="paymentPhone" 
+                        placeholder="0712345678 or 254712345678"
+                        style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;"
+                        required
+                    >
+                </div>
+                
+                <div style="background: #fff3cd; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <strong>Or upgrade to Professional:</strong>
+                    <p style="margin: 0.5rem 0;">Get unlimited reports + advanced scans for 2,000 KSH/month</p>
+                    <a href="/pricing" style="color: #3498db; font-weight: 600;">View Pricing →</a>
+                </div>
+                
+                <div style="display: flex; gap: 1rem;">
+                    <button onclick="processPayment()" class="btn btn-primary" id="payNowBtn" style="flex: 1;">
+                        Pay 100 KSH Now
+                    </button>
+                    <button onclick="closePaymentModal()" class="btn btn-secondary">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Focus on phone input
+    setTimeout(() => {
+        document.getElementById('paymentPhone').focus();
+    }, 100);
+}
+
+function closePaymentModal() {
+    const modal = document.getElementById('paymentModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    if (window.paymentStatusInterval) {
+        clearInterval(window.paymentStatusInterval);
+        window.paymentStatusInterval = null;
     }
 }
+
+async function processPayment() {
+    const phoneNumber = document.getElementById('paymentPhone').value;
+    const statusDiv = document.getElementById('paymentStatusDiv');
+    const payBtn = document.getElementById('payNowBtn');
+    
+    if (!phoneNumber) {
+        showAlert('Please enter your M-Pesa phone number', 'error');
+        return;
+    }
+    
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#fff3cd';
+    statusDiv.style.color = '#856404';
+    statusDiv.textContent = 'Initiating payment...';
+    payBtn.disabled = true;
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/payment/initiate-report`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                phone_number: phoneNumber,
+                scan_id: currentScanId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            if (data.already_paid) {
+                statusDiv.style.background = '#d4edda';
+                statusDiv.style.color = '#155724';
+                statusDiv.textContent = '✓ Already paid! Downloading...';
+                
+                setTimeout(() => {
+                    window.location.href = `${API_BASE_URL}/api/report/${currentScanId}?phone=${phoneNumber}`;
+                    closePaymentModal();
+                }, 1000);
+                return;
+            }
+            
+            const checkoutId = data.checkout_request_id;
+            
+            statusDiv.style.background = '#e3f2fd';
+            statusDiv.style.color = '#1976d2';
+            statusDiv.innerHTML = `
+                <div>📱 Check your phone for M-Pesa prompt</div>
+                <div style="margin-top: 0.5rem; font-size: 0.9rem;">Enter your PIN to complete payment</div>
+                <div class="loading-spinner" style="margin: 1rem auto;"></div>
+            `;
+            
+            // Start checking payment status
+            startPaymentStatusCheck(checkoutId, phoneNumber);
+            
+        } else {
+            statusDiv.style.background = '#f8d7da';
+            statusDiv.style.color = '#721c24';
+            statusDiv.textContent = `Error: ${data.error || 'Failed to initiate payment'}`;
+            payBtn.disabled = false;
+        }
+        
+    } catch (error) {
+        console.error('Payment error:', error);
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.style.color = '#721c24';
+        statusDiv.textContent = 'Network error. Please try again.';
+        payBtn.disabled = false;
+    }
+}
+
+function startPaymentStatusCheck(checkoutId, phoneNumber) {
+    let attempts = 0;
+    const maxAttempts = 60;
+    
+    window.paymentStatusInterval = setInterval(async () => {
+        attempts++;
+        
+        if (attempts > maxAttempts) {
+            clearInterval(window.paymentStatusInterval);
+            const statusDiv = document.getElementById('paymentStatusDiv');
+            statusDiv.style.background = '#f8d7da';
+            statusDiv.style.color = '#721c24';
+            statusDiv.textContent = 'Payment timeout. Please try again.';
+            document.getElementById('payNowBtn').disabled = false;
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/payment/status/${checkoutId}`);
+            const data = await response.json();
+            
+            if (data.status === 'success' && data.payment.found) {
+                const paymentStatus = data.payment.status;
+                const statusDiv = document.getElementById('paymentStatusDiv');
+                
+                if (paymentStatus === 'completed') {
+                    clearInterval(window.paymentStatusInterval);
+                    
+                    statusDiv.style.background = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    statusDiv.innerHTML = `
+                        <div>✓ Payment Successful!</div>
+                        <div style="margin-top: 0.5rem;">Receipt: ${data.payment.mpesa_receipt || 'Processing'}</div>
+                        <div style="margin-top: 0.5rem; font-size: 0.9rem;">Downloading report...</div>
+                    `;
+                    
+                    // Download report
+                    setTimeout(() => {
+                        window.location.href = `${API_BASE_URL}/api/report/${currentScanId}?phone=${phoneNumber}`;
+                        setTimeout(() => closePaymentModal(), 1000);
+                    }, 1000);
+                    
+                } else if (paymentStatus === 'failed') {
+                    clearInterval(window.paymentStatusInterval);
+                    
+                    statusDiv.style.background = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.textContent = 'Payment failed or was cancelled. Please try again.';
+                    document.getElementById('payNowBtn').disabled = false;
+                }
+            }
+            
+        } catch (error) {
+            console.error('Status check error:', error);
+        }
+        
+    }, 2000);
+}
+
+function openSubscriptionModal() {
+    document.getElementById('subscriptionModal').classList.add('active');
+}
+
+function closeSubscriptionModal() {
+    document.getElementById('subscriptionModal').classList.remove('active');
+}
+
 
 function resetForm() {
     document.getElementById('scanForm').reset();

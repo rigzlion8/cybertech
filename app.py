@@ -16,6 +16,8 @@ from modules.scanner import SecurityScanner
 from modules.report_generator import ReportGenerator
 from modules.email_sender import EmailSender
 from modules.scan_storage import ScanStorage
+from modules.mpesa_payment import MPesaPayment
+from modules.payment_manager import PaymentManager
 
 # Load environment variables
 load_dotenv()
@@ -44,6 +46,11 @@ os.makedirs('reports', exist_ok=True)
 
 # Initialize scan storage
 scan_storage = ScanStorage()
+
+# Initialize payment systems
+mpesa_environment = os.getenv('MPESA_ENVIRONMENT', 'sandbox')
+mpesa_payment = MPesaPayment(environment=mpesa_environment)
+payment_manager = PaymentManager()
 
 
 @app.route('/')
@@ -164,8 +171,24 @@ def perform_scan():
 
 @app.route('/api/report/<scan_id>', methods=['GET'])
 def get_report(scan_id):
-    """Download scan report"""
+    """Download scan report (requires payment or subscription)"""
     try:
+        # Check if payment is required
+        phone_number = request.args.get('phone')
+        
+        # If phone number provided, check payment status
+        if phone_number:
+            # Check if user has paid for this report or has subscription
+            has_paid = payment_manager.check_report_payment(scan_id, phone_number)
+            
+            if not has_paid:
+                return jsonify({
+                    'error': 'Payment required',
+                    'status': 'error',
+                    'payment_required': True,
+                    'message': 'Pay 100 KSH to download this report or subscribe for unlimited access'
+                }), 402  # Payment Required status code
+        
         report_path = f'reports/scan_{scan_id}.pdf'
         
         if not os.path.exists(report_path):
@@ -394,6 +417,225 @@ def get_target_improvement(target):
         
     except Exception as e:
         logger.error(f"Error getting score improvement: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/pricing')
+def pricing_page():
+    """Serve the pricing/subscription page"""
+    return send_from_directory('static', 'pricing.html')
+
+
+@app.route('/api/payment/initiate-report', methods=['POST'])
+def initiate_report_payment():
+    """
+    Initiate payment for report download (100 KSH)
+    Expected JSON: {"phone_number": "254XXXXXXXXX", "scan_id": "abc123"}
+    """
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone_number')
+        scan_id = data.get('scan_id')
+        
+        if not phone_number or not scan_id:
+            return jsonify({
+                'status': 'error',
+                'error': 'Phone number and scan ID are required'
+            }), 400
+        
+        # Check if already paid
+        if payment_manager.check_report_payment(scan_id, phone_number):
+            return jsonify({
+                'status': 'success',
+                'already_paid': True,
+                'message': 'Report already paid for or you have an active subscription'
+            }), 200
+        
+        # Initiate M-Pesa payment
+        result = mpesa_payment.initiate_stk_push(
+            phone_number=phone_number,
+            amount=100,
+            account_reference=f"REPORT-{scan_id}",
+            transaction_desc="CyberTech Report Download"
+        )
+        
+        if result.get('success'):
+            # Save payment record
+            payment_manager.create_payment_record({
+                'checkout_request_id': result['checkout_request_id'],
+                'merchant_request_id': result['merchant_request_id'],
+                'phone_number': phone_number,
+                'amount': 100,
+                'payment_type': 'report_download',
+                'scan_id': scan_id
+            })
+            
+            return jsonify({
+                'status': 'success',
+                'checkout_request_id': result['checkout_request_id'],
+                'message': result.get('customer_message', 'Payment request sent to your phone')
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'error': result.get('error', 'Failed to initiate payment')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error initiating report payment: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/payment/initiate-subscription', methods=['POST'])
+def initiate_subscription_payment():
+    """
+    Initiate subscription payment (2000 KSH/month)
+    Expected JSON: {"phone_number": "254XXXXXXXXX", "plan": "pro"}
+    """
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone_number')
+        plan = data.get('plan', 'pro')
+        
+        if not phone_number:
+            return jsonify({
+                'status': 'error',
+                'error': 'Phone number is required'
+            }), 400
+        
+        # Get plan details
+        plan_details = payment_manager.PLANS.get(plan)
+        if not plan_details:
+            return jsonify({
+                'status': 'error',
+                'error': 'Invalid plan'
+            }), 400
+        
+        amount = plan_details['price']
+        
+        # Initiate M-Pesa payment
+        result = mpesa_payment.initiate_stk_push(
+            phone_number=phone_number,
+            amount=amount,
+            account_reference=f"SUB-{plan.upper()}",
+            transaction_desc=f"CyberTech {plan_details['name']}"
+        )
+        
+        if result.get('success'):
+            # Save payment record
+            payment_manager.create_payment_record({
+                'checkout_request_id': result['checkout_request_id'],
+                'merchant_request_id': result['merchant_request_id'],
+                'phone_number': phone_number,
+                'amount': amount,
+                'payment_type': 'subscription',
+                'metadata': {'plan': plan}
+            })
+            
+            return jsonify({
+                'status': 'success',
+                'checkout_request_id': result['checkout_request_id'],
+                'message': result.get('customer_message', 'Payment request sent to your phone')
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'error': result.get('error', 'Failed to initiate payment')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error initiating subscription payment: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/payment/callback', methods=['POST'])
+def mpesa_callback():
+    """
+    M-Pesa payment callback endpoint
+    Receives payment confirmation from Safaricom
+    """
+    try:
+        callback_data = request.get_json()
+        logger.info(f"M-Pesa callback received: {json.dumps(callback_data)}")
+        
+        # Validate and parse callback
+        parsed_data = mpesa_payment.validate_callback(callback_data)
+        
+        if parsed_data.get('checkout_request_id'):
+            # Update payment status
+            payment_manager.update_payment_status(
+                parsed_data['checkout_request_id'],
+                parsed_data
+            )
+        
+        # Always return success to M-Pesa
+        return jsonify({
+            'ResultCode': 0,
+            'ResultDesc': 'Success'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error processing M-Pesa callback: {str(e)}")
+        return jsonify({
+            'ResultCode': 1,
+            'ResultDesc': 'Failed'
+        }), 200
+
+
+@app.route('/api/payment/status/<checkout_request_id>', methods=['GET'])
+def check_payment_status(checkout_request_id):
+    """Check payment status"""
+    try:
+        status = payment_manager.check_payment_status(checkout_request_id)
+        
+        return jsonify({
+            'status': 'success',
+            'payment': status
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error checking payment status: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/subscription/check', methods=['POST'])
+def check_subscription():
+    """
+    Check if phone number has active subscription
+    Expected JSON: {"phone_number": "254XXXXXXXXX"}
+    """
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone_number')
+        
+        if not phone_number:
+            return jsonify({
+                'status': 'error',
+                'error': 'Phone number is required'
+            }), 400
+        
+        subscription = payment_manager.get_subscription(phone_number)
+        
+        return jsonify({
+            'status': 'success',
+            'has_subscription': subscription is not None,
+            'subscription': subscription
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error checking subscription: {str(e)}")
         return jsonify({
             'status': 'error',
             'error': str(e)
