@@ -567,7 +567,7 @@ function showPaymentModal() {
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
                 <h2 class="modal-title">Download Complete Security Report</h2>
-                <button class="modal-close" onclick="closePaymentModal()">&times;</button>
+                <button class="modal-close" id="modalCloseBtn">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="paymentStatusDiv" style="display: none; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; text-align: center;"></div>
@@ -581,7 +581,7 @@ function showPaymentModal() {
                 
                 <!-- M-Pesa Option -->
                 <div id="mpesaSection" style="margin-bottom: 1.5rem;">
-                    <div style="background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem; transition: all 0.3s;" onclick="selectPaymentMethod('mpesa')">
+                    <div id="mpesaSelectBtn" style="background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem; transition: all 0.3s;">
                         <div style="display: flex; align-items: center; justify-content: space-between;">
                             <div style="display: flex; align-items: center; gap: 1rem;">
                                 <span style="font-size: 2rem;">📱</span>
@@ -604,7 +604,7 @@ function showPaymentModal() {
                                 style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;"
                             >
                         </div>
-                        <button onclick="processPayment('mpesa')" class="btn btn-primary" id="mpesaPayBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
+                        <button type="button" class="btn btn-primary" id="mpesaPayBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
                             💳 Pay 100 KSH via M-Pesa
                         </button>
                         <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">You'll receive an STK push to complete payment</p>
@@ -613,7 +613,7 @@ function showPaymentModal() {
                 
                 <!-- Paystack Option -->
                 <div id="paystackSection">
-                    <div style="background: #3498db; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem; transition: all 0.3s;" onclick="selectPaymentMethod('paystack')">
+                    <div id="paystackSelectBtn" style="background: #3498db; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem; transition: all 0.3s;">
                         <div style="display: flex; align-items: center; justify-content: space-between;">
                             <div style="display: flex; align-items: center; gap: 1rem;">
                                 <span style="font-size: 2rem;">💳</span>
@@ -636,7 +636,7 @@ function showPaymentModal() {
                                 style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;"
                             >
                         </div>
-                        <button onclick="processPayment('paystack')" class="btn btn-primary" id="paystackPayBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem; background: #3498db;">
+                        <button type="button" class="btn btn-primary" id="paystackPayBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem; background: #3498db;">
                             💳 Pay with Card
                         </button>
                         <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">Secure payment via Paystack</p>
@@ -655,6 +655,13 @@ function showPaymentModal() {
     `;
     
     document.body.appendChild(modal);
+    
+    // Add event listeners after modal is added to DOM
+    document.getElementById('modalCloseBtn').addEventListener('click', closePaymentModal);
+    document.getElementById('mpesaSelectBtn').addEventListener('click', () => selectPaymentMethod('mpesa'));
+    document.getElementById('paystackSelectBtn').addEventListener('click', () => selectPaymentMethod('paystack'));
+    document.getElementById('mpesaPayBtn').addEventListener('click', () => processPayment('mpesa'));
+    document.getElementById('paystackPayBtn').addEventListener('click', () => processPayment('paystack'));
 }
 
 function selectPaymentMethod(method) {
