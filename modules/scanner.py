@@ -15,6 +15,10 @@ from .ssl_checker import SSLChecker
 from .password_checker import PasswordChecker
 from .header_analyzer import HeaderAnalyzer
 from .database_checker import DatabaseChecker
+from .sqli_scanner import SQLInjectionScanner
+from .xss_scanner import XSSScanner
+from .quick_wins_scanner import QuickWinsScanner
+from .directory_enum_scanner import DirectoryEnumerationScanner
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +98,30 @@ class SecurityScanner:
                 db_checker = DatabaseChecker(self.target)
                 results['results']['database'] = db_checker.check()
             
+            # SQL Injection Scanner
+            if scan_config.get('sql_injection_check'):
+                logger.info("Starting SQL injection scan...")
+                sqli_scanner = SQLInjectionScanner(self.target)
+                results['results']['sql_injection'] = sqli_scanner.scan()
+            
+            # XSS Scanner
+            if scan_config.get('xss_check'):
+                logger.info("Starting XSS scan...")
+                xss_scanner = XSSScanner(self.target)
+                results['results']['xss'] = xss_scanner.scan()
+            
+            # Quick Wins Scanner
+            if scan_config.get('quick_wins_check'):
+                logger.info("Starting quick wins scan...")
+                quick_scanner = QuickWinsScanner(self.target)
+                results['results']['quick_wins'] = quick_scanner.scan()
+            
+            # Directory Enumeration
+            if scan_config.get('directory_enum_check'):
+                logger.info("Starting directory enumeration...")
+                dir_scanner = DirectoryEnumerationScanner(self.target)
+                results['results']['directory_enum'] = dir_scanner.scan()
+            
             # Calculate overall security score
             results['security_score'] = self._calculate_security_score(results['results'])
             results['risk_level'] = self._get_risk_level(results['security_score'])
@@ -149,7 +177,11 @@ class SecurityScanner:
                 'ssl_check': self.options.get('ssl_check', True),
                 'headers_check': self.options.get('headers_check', True),
                 'password_check': self.options.get('password_check', True),
-                'database_check': self.options.get('database_check', False)
+                'database_check': self.options.get('database_check', False),
+                'sql_injection_check': self.options.get('sql_injection_check', True),
+                'xss_check': self.options.get('xss_check', True),
+                'quick_wins_check': self.options.get('quick_wins_check', True),
+                'directory_enum_check': self.options.get('directory_enum_check', True)
             }
         elif self.scan_type == 'quick':
             return {
@@ -158,7 +190,11 @@ class SecurityScanner:
                 'ssl_check': True,
                 'headers_check': True,
                 'password_check': False,
-                'database_check': False
+                'database_check': False,
+                'sql_injection_check': False,
+                'xss_check': False,
+                'quick_wins_check': True,  # Quick wins are fast, keep them
+                'directory_enum_check': False
             }
         else:  # custom
             return self.options
@@ -167,11 +203,15 @@ class SecurityScanner:
         """Calculate overall security score (0-100)"""
         scores = []
         weights = {
-            'ssl_tls': 0.25,
-            'headers': 0.20,
-            'vulnerabilities': 0.30,
-            'passwords': 0.15,
-            'port_scan': 0.10
+            'ssl_tls': 0.15,
+            'headers': 0.10,
+            'vulnerabilities': 0.15,
+            'passwords': 0.10,
+            'port_scan': 0.05,
+            'sql_injection': 0.20,  # Critical - high weight
+            'xss': 0.15,  # High - medium-high weight
+            'quick_wins': 0.05,
+            'directory_enum': 0.05
         }
         
         for category, weight in weights.items():
