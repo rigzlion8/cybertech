@@ -74,8 +74,10 @@ async function handleScanSubmit(e) {
             
             // Always enable download button - payment modal will handle access
             const downloadBtn = document.getElementById('downloadBtn');
-            downloadBtn.disabled = false;
-            downloadBtn.style.opacity = '1';
+            if (downloadBtn) {
+                downloadBtn.disabled = false;
+                downloadBtn.style.opacity = '1';
+            }
             
             showAlert('Scan completed successfully! Click download to get your full report.', 'success');
         } else {
@@ -806,7 +808,7 @@ async function processPayment(method) {
             statusDiv.style.background = '#f8d7da';
             statusDiv.style.color = '#721c24';
             statusDiv.textContent = `Error: ${data.error || 'Failed to initiate payment'}`;
-            payBtn.disabled = false;
+            if (payBtn) payBtn.disabled = false;
         }
         
     } catch (error) {
@@ -814,7 +816,7 @@ async function processPayment(method) {
         statusDiv.style.background = '#f8d7da';
         statusDiv.style.color = '#721c24';
         statusDiv.textContent = 'Network error. Please try again.';
-        payBtn.disabled = false;
+        if (payBtn) payBtn.disabled = false;
     }
 }
 
@@ -833,16 +835,18 @@ function startPaymentStatusCheck(checkoutId, phoneNumber) {
             const statusDiv = document.getElementById('paymentStatusDiv');
             const mpesaBtn = document.getElementById('mpesaPayBtn');
             
-            statusDiv.style.background = '#f8d7da';
-            statusDiv.style.color = '#721c24';
-            statusDiv.innerHTML = `
-                <div>⏱️ Payment Timeout</div>
-                <div style="margin-top: 0.5rem;">Payment request expired. Please try again.</div>
-                <button onclick="closePaymentModal(); setTimeout(() => document.getElementById('downloadBtn').click(), 500);" 
-                        style="margin-top: 1rem; padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                    Try Again
-                </button>
-            `;
+            if (statusDiv) {
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.innerHTML = `
+                    <div>⏱️ Payment Timeout</div>
+                    <div style="margin-top: 0.5rem;">Payment request expired. Please try again.</div>
+                    <button onclick="closePaymentModal(); setTimeout(() => document.getElementById('downloadBtn').click(), 500);" 
+                            style="margin-top: 1rem; padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Try Again
+                    </button>
+                `;
+            }
             
             if (mpesaBtn) mpesaBtn.disabled = false;
             return;
@@ -863,13 +867,15 @@ function startPaymentStatusCheck(checkoutId, phoneNumber) {
                     clearInterval(window.paymentStatusInterval);
                     console.log('Payment completed successfully!');
                     
-                    statusDiv.style.background = '#d4edda';
-                    statusDiv.style.color = '#155724';
-                    statusDiv.innerHTML = `
-                        <div>✓ Payment Successful!</div>
-                        <div style="margin-top: 0.5rem;">Receipt: ${data.payment.mpesa_receipt || 'Processing'}</div>
-                        <div style="margin-top: 0.5rem; font-size: 0.9rem;">Downloading report...</div>
-                    `;
+                    if (statusDiv) {
+                        statusDiv.style.background = '#d4edda';
+                        statusDiv.style.color = '#155724';
+                        statusDiv.innerHTML = `
+                            <div>✓ Payment Successful!</div>
+                            <div style="margin-top: 0.5rem;">Receipt: ${data.payment.mpesa_receipt || 'Processing'}</div>
+                            <div style="margin-top: 0.5rem; font-size: 0.9rem;">Downloading report...</div>
+                        `;
+                    }
                     
                     // Download report
                     setTimeout(() => {
@@ -881,20 +887,22 @@ function startPaymentStatusCheck(checkoutId, phoneNumber) {
                     clearInterval(window.paymentStatusInterval);
                     console.log('Payment failed or cancelled');
                     
-                    statusDiv.style.background = '#f8d7da';
-                    statusDiv.style.color = '#721c24';
-                    statusDiv.innerHTML = `
-                        <div>❌ Payment ${paymentStatus === 'cancelled' ? 'Cancelled' : 'Failed'}</div>
-                        <div style="margin-top: 0.5rem;">
-                            ${paymentStatus === 'cancelled' 
-                                ? 'You cancelled the payment. Please try again with correct PIN.' 
-                                : 'Payment was not successful. Please try again.'}
-                        </div>
-                        <button onclick="closePaymentModal(); setTimeout(() => document.getElementById('downloadBtn').click(), 500);" 
-                                style="margin-top: 1rem; padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                            Try Again
-                        </button>
-                    `;
+                    if (statusDiv) {
+                        statusDiv.style.background = '#f8d7da';
+                        statusDiv.style.color = '#721c24';
+                        statusDiv.innerHTML = `
+                            <div>❌ Payment ${paymentStatus === 'cancelled' ? 'Cancelled' : 'Failed'}</div>
+                            <div style="margin-top: 0.5rem;">
+                                ${paymentStatus === 'cancelled' 
+                                    ? 'You cancelled the payment. Please try again with correct PIN.' 
+                                    : 'Payment was not successful. Please try again.'}
+                            </div>
+                            <button onclick="closePaymentModal(); setTimeout(() => document.getElementById('downloadBtn').click(), 500);" 
+                                    style="margin-top: 1rem; padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                Try Again
+                            </button>
+                        `;
+                    }
                     
                     if (mpesaBtn) mpesaBtn.disabled = false;
                 }
