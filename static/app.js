@@ -328,11 +328,34 @@ function buildCategorySection(category, data) {
     
     // Admin Panels Found
     if (data.admin_panels_found && data.admin_panels_found.length > 0) {
-        html += '<div style="margin-top: 1rem;"><strong>Admin Panels Discovered:</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">';
-        data.admin_panels_found.forEach(panel => {
-            html += `<li style="color: #e67e22; font-weight: bold;">🔐 ${panel.path || panel.url || 'Unknown path'}</li>`;
+        const panelId = 'panels_' + Math.random().toString(36).substr(2, 9);
+        const showLimit = 5;
+        const hasMore = data.admin_panels_found.length > showLimit;
+        
+        html += `<div style="margin-top: 1rem;"><strong>Admin Panels Discovered (${data.admin_panels_found.length}):</strong><ul style="margin-left: 1.5rem; margin-top: 0.5rem;">`;
+        
+        data.admin_panels_found.forEach((panel, index) => {
+            const hideClass = index >= showLimit ? 'hidden-item' : '';
+            html += `
+                <li class="${hideClass}" data-parent="${panelId}" style="color: #e67e22; font-weight: bold; margin-bottom: 0.5rem; ${index >= showLimit ? 'display: none;' : ''}">
+                    🔐 ${panel.path || panel.url || 'Unknown path'}
+                    ${panel.description ? `<br><small style="color: #7f8c8d; font-weight: normal;">${panel.description}</small>` : ''}
+                </li>
+            `;
         });
-        html += '</ul></div>';
+        
+        html += '</ul>';
+        
+        if (hasMore) {
+            html += `
+                <button onclick="toggleDetails('${panelId}')" id="btn_${panelId}" 
+                    style="margin-top: 0.5rem; padding: 0.4rem 1rem; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                    Show ${data.admin_panels_found.length - showLimit} More
+                </button>
+            `;
+        }
+        
+        html += '</div>';
     }
     
     // Directories Found
@@ -404,14 +427,38 @@ function showAlert(message, type) {
     }, 5000);
 }
 
-function downloadReport() {
-    if (currentScanId) {
-        const downloadBtn = document.getElementById('downloadBtn');
-        if (downloadBtn && downloadBtn.disabled) {
-            showAlert('PDF report is not available for this scan.', 'error');
-            return;
+async function downloadReport() {
+    if (!currentScanId) {
+        showAlert('No scan ID available.', 'error');
+        return;
+    }
+    
+    const downloadBtn = document.getElementById('downloadBtn');
+    if (downloadBtn && downloadBtn.disabled) {
+        showAlert('PDF report is not available for this scan.', 'error');
+        return;
+    }
+    
+    try {
+        // First check if report exists
+        const checkUrl = `${API_BASE_URL}/api/report/${currentScanId}`;
+        const response = await fetch(checkUrl, { method: 'HEAD' });
+        
+        if (response.ok) {
+            // Report exists, download it
+            window.location.href = checkUrl;
+        } else {
+            // Report doesn't exist
+            showAlert('PDF report is not yet available. The report may still be generating or generation failed. You can view the results above.', 'error');
+            if (downloadBtn) {
+                downloadBtn.disabled = true;
+                downloadBtn.style.opacity = '0.5';
+                downloadBtn.textContent = '📄 Report Not Available';
+            }
         }
-        window.location.href = `${API_BASE_URL}/api/report/${currentScanId}`;
+    } catch (error) {
+        console.error('Error downloading report:', error);
+        showAlert('Unable to download report. Please try again later or contact support.', 'error');
     }
 }
 
