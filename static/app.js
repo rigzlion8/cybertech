@@ -72,18 +72,12 @@ async function handleScanSubmit(e) {
             currentScanId = data.scan_id;
             displayResults(data.results);
             
-            // Update download button based on report availability
+            // Always enable download button - payment modal will handle access
             const downloadBtn = document.getElementById('downloadBtn');
-            if (data.report_available) {
-                downloadBtn.disabled = false;
-                downloadBtn.style.opacity = '1';
-                showAlert('Scan completed successfully!', 'success');
-            } else {
-                downloadBtn.disabled = true;
-                downloadBtn.style.opacity = '0.5';
-                downloadBtn.title = 'PDF report generation in progress or failed';
-                showAlert('Scan completed! Note: PDF report may not be available.', 'success');
-            }
+            downloadBtn.disabled = false;
+            downloadBtn.style.opacity = '1';
+            
+            showAlert('Scan completed successfully! Click download to get your full report.', 'success');
         } else {
             showAlert(data.error || 'Scan failed. Please try again.', 'error');
         }
@@ -128,22 +122,38 @@ function displayResults(results) {
     scanDuration.textContent = `${results.duration.toFixed(2)}s`;
     
     // Build detailed results - Show only 2 critical issues preview
-    let detailsHTML = '<h4 style="margin-bottom: 1rem;">Critical Issues Found</h4>';
+    let detailsHTML = '<h4 style="margin-bottom: 1rem;">Security Assessment Results</h4>';
     
     const scanResults = results.results || {};
     
     // Collect all critical/high severity issues
     const criticalIssues = [];
+    let totalIssuesCount = 0;
+    
     for (const [category, categoryResults] of Object.entries(scanResults)) {
         if (typeof categoryResults === 'object') {
+            // Check if scan found any vulnerabilities (vulnerable flag)
+            if (categoryResults.vulnerable === true || categoryResults.risk_level === 'CRITICAL' || categoryResults.risk_level === 'HIGH') {
+                // Add a generic critical issue for this category
+                const categoryName = category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                criticalIssues.push({
+                    category: category,
+                    type: `${categoryName} Vulnerability`,
+                    severity: categoryResults.risk_level || 'HIGH',
+                    description: `Critical security issues detected in ${categoryName}. Full details in report.`
+                });
+            }
+            
             // Check vulnerabilities
             if (categoryResults.vulnerabilities && Array.isArray(categoryResults.vulnerabilities)) {
                 categoryResults.vulnerabilities.forEach(vuln => {
-                    if (vuln.severity === 'CRITICAL' || vuln.severity === 'HIGH') {
+                    const severity = vuln.severity || 'MEDIUM';
+                    if (severity === 'CRITICAL' || severity === 'HIGH') {
+                        totalIssuesCount++;
                         criticalIssues.push({
                             category: category,
-                            type: vuln.type || 'Security Issue',
-                            severity: vuln.severity,
+                            type: vuln.type || 'Security Vulnerability',
+                            severity: severity,
                             description: vuln.description || 'Critical vulnerability detected'
                         });
                     }
@@ -153,11 +163,13 @@ function displayResults(results) {
             // Check issues
             if (categoryResults.issues && Array.isArray(categoryResults.issues)) {
                 categoryResults.issues.forEach(issue => {
-                    if (issue.severity === 'CRITICAL' || issue.severity === 'HIGH') {
+                    const severity = issue.severity || 'MEDIUM';
+                    if (severity === 'CRITICAL' || severity === 'HIGH') {
+                        totalIssuesCount++;
                         criticalIssues.push({
                             category: category,
                             type: issue.type || 'Security Issue',
-                            severity: issue.severity,
+                            severity: severity,
                             description: issue.description || issue.issue || 'Security issue detected'
                         });
                     }
@@ -166,18 +178,36 @@ function displayResults(results) {
             
             // Check sensitive files
             if (categoryResults.sensitive_files_found && Array.isArray(categoryResults.sensitive_files_found)) {
-                categoryResults.sensitive_files_found.slice(0, 2).forEach(file => {
-                    if (file.severity === 'CRITICAL' || file.severity === 'HIGH') {
+                categoryResults.sensitive_files_found.forEach(file => {
+                    const severity = file.severity || 'HIGH';
+                    if (severity === 'CRITICAL' || severity === 'HIGH') {
+                        totalIssuesCount++;
                         criticalIssues.push({
                             category: 'directory_enum',
                             type: file.type || 'Exposed File',
-                            severity: file.severity,
-                            description: file.description || `Exposed file: ${file.path}`
+                            severity: severity,
+                            description: file.description || `Critical file exposed: ${file.path}`
                         });
                     }
                 });
             }
+            
+            // Check admin panels
+            if (categoryResults.admin_panels_found && Array.isArray(categoryResults.admin_panels_found) && categoryResults.admin_panels_found.length > 0) {
+                totalIssuesCount += categoryResults.admin_panels_found.length;
+                criticalIssues.push({
+                    category: 'directory_enum',
+                    type: 'Admin Panel Exposed',
+                    severity: 'HIGH',
+                    description: `${categoryResults.admin_panels_found.length} admin panel(s) found accessible to public`
+                });
+            }
         }
+    }
+    
+    // Use the count from critical issues if we collected detailed ones
+    if (totalIssuesCount === 0) {
+        totalIssuesCount = criticalIssues.length;
     }
     
     // Show only top 2 critical issues
@@ -203,10 +233,10 @@ function displayResults(results) {
             `;
         });
         
-        if (criticalIssues.length > 2) {
+        if (totalIssuesCount > 2) {
             detailsHTML += `
                 <div style="background: #e74c3c; color: white; padding: 1rem; border-radius: 8px; text-align: center; margin-top: 1.5rem;">
-                    <strong>+ ${criticalIssues.length - 2} more critical issues found!</strong>
+                    <strong>+ ${totalIssuesCount - 2} more critical issues found!</strong>
                 </div>
             `;
         }
@@ -218,16 +248,27 @@ function displayResults(results) {
                 <ul style="text-align: left; max-width: 400px; margin: 0 auto 1.5rem auto; list-style: none; padding: 0;">
                     <li style="padding: 0.5rem 0;">✓ Comprehensive vulnerability analysis</li>
                     <li style="padding: 0.5rem 0;">✓ Step-by-step remediation guide</li>
-                    <li style="padding: 0.5rem 0;">✓ All ${criticalIssues.length} security issues detailed</li>
+                    <li style="padding: 0.5rem 0;">✓ All ${totalIssuesCount} security issues detailed</li>
                     <li style="padding: 0.5rem 0;">✓ Professional security report</li>
                 </ul>
             </div>
         `;
     } else {
         detailsHTML += `
-            <div style="background: #d4edda; padding: 1.5rem; border-radius: 8px; text-align: center; color: #155724;">
+            <div style="background: #d4edda; padding: 1.5rem; border-radius: 8px; text-align: center; color: #155724; margin-bottom: 1.5rem;">
                 <h3 style="margin: 0 0 0.5rem 0;">✓ Great News!</h3>
                 <p style="margin: 0;">No critical security issues found. Your website appears to be well-protected.</p>
+            </div>
+            
+            <div style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%); padding: 2rem; border-radius: 12px; text-align: center; color: white;">
+                <h3 style="margin: 0 0 1rem 0; font-size: 1.5rem;">🔒 Get Your Detailed Security Report</h3>
+                <p style="margin: 0 0 1.5rem 0; opacity: 0.9;">Download the complete PDF report with comprehensive analysis and security recommendations</p>
+                <ul style="text-align: left; max-width: 400px; margin: 0 auto 1.5rem auto; list-style: none; padding: 0;">
+                    <li style="padding: 0.5rem 0;">✓ Complete security assessment</li>
+                    <li style="padding: 0.5rem 0;">✓ Best practices recommendations</li>
+                    <li style="padding: 0.5rem 0;">✓ Security score breakdown</li>
+                    <li style="padding: 0.5rem 0;">✓ Professional documentation</li>
+                </ul>
             </div>
         `;
     }

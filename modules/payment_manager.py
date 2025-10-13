@@ -23,13 +23,15 @@ class PaymentManager:
     PLANS = {
         'basic': {
             'name': 'Basic Plan',
-            'price': 0,
+            'price': 100,  # KSH per month
             'duration_days': 30,
             'features': [
                 'Basic security scans',
                 'SSL/TLS checks',
                 'Header analysis',
-                '1 scan per day'
+                'Quick wins scanner',
+                '2 scans per day',
+                'View results online'
             ]
         },
         'pro': {

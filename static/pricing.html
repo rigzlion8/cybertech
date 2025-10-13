@@ -280,13 +280,13 @@
 
         <!-- Pricing Plans -->
         <div class="pricing-grid">
-            <!-- Free Plan -->
+            <!-- Basic Plan -->
             <div class="pricing-card">
                 <div class="plan-name">Basic</div>
                 <div class="plan-price">
-                    FREE
+                    100<span> KSH/month</span>
                 </div>
-                <div class="plan-duration">Always free</div>
+                <div class="plan-duration">Billed monthly via M-Pesa</div>
                 
                 <ul class="plan-features">
                     <li>Basic security scans</li>
@@ -294,12 +294,12 @@
                     <li>Header analysis</li>
                     <li>Quick wins scanner</li>
                     <li>View results online</li>
-                    <li>1 scan per day</li>
+                    <li>2 scans per day</li>
                 </ul>
                 
-                <a href="/#scan">
-                    <button class="plan-button secondary">Get Started Free</button>
-                </a>
+                <button class="plan-button secondary" onclick="subscribeToBasic()">
+                    Subscribe to Basic
+                </button>
             </div>
 
             <!-- Professional Plan -->
@@ -357,8 +357,8 @@
     <div id="subscriptionModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title">Subscribe to Professional Plan</h2>
-                <p style="color: var(--text-light);">2,000 KSH/month - Billed monthly via M-Pesa</p>
+                <h2 class="modal-title" id="modalPlanTitle">Subscribe to Professional Plan</h2>
+                <p style="color: var(--text-light);" id="modalPlanPrice">2,000 KSH/month</p>
             </div>
             
             <div id="paymentStatus" class="payment-status" style="display: none;"></div>
@@ -390,7 +390,7 @@
                     >
                 </div>
                 <button onclick="processSubscription('mpesa')" class="btn btn-primary" id="mpesaSubBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
-                    💳 Pay 2,000 KSH via M-Pesa
+                    💳 <span id="mpesaAmount">Pay 2,000 KSH</span> via M-Pesa
                 </button>
                 <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">You'll receive an STK push on your phone</p>
             </div>

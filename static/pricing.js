@@ -50,6 +50,9 @@ async function processSubscription(method) {
     try {
         let response;
         
+        // Determine amount based on selected plan
+        const planAmount = selectedPlan === 'basic' ? 100 : 2000;
+        
         if (method === 'mpesa') {
             response = await fetch(`${API_BASE_URL}/api/payment/initiate-subscription`, {
                 method: 'POST',
@@ -58,7 +61,7 @@ async function processSubscription(method) {
                 },
                 body: JSON.stringify({
                     phone_number: identifier,
-                    plan: 'pro'
+                    plan: selectedPlan
                 })
             });
         } else if (method === 'paystack') {
@@ -70,8 +73,11 @@ async function processSubscription(method) {
                 },
                 body: JSON.stringify({
                     email: identifier,
-                    amount: 2000,
-                    type: 'subscription'
+                    amount: planAmount,
+                    type: 'subscription',
+                    metadata: {
+                        plan: selectedPlan
+                    }
                 })
             });
         }
@@ -184,6 +190,55 @@ function openSubscriptionModal() {
     // Reset form
     document.getElementById('subscriptionForm').reset();
     document.getElementById('paymentStatus').style.display = 'none';
+    
+    if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+        statusCheckInterval = null;
+    }
+}
+
+function closeSubscriptionModal() {
+    document.getElementById('subscriptionModal').classList.remove('active');
+    
+    if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+        statusCheckInterval = null;
+    }
+}
+
+let selectedPlan = 'pro'; // Default to pro
+
+function subscribeToBasic() {
+    selectedPlan = 'basic';
+    document.getElementById('modalPlanTitle').textContent = 'Subscribe to Basic Plan';
+    document.getElementById('modalPlanPrice').textContent = '100 KSH/month';
+    document.getElementById('mpesaAmount').textContent = 'Pay 100 KSH';
+    
+    document.getElementById('subscriptionModal').classList.add('active');
+    document.getElementById('paymentStatus').style.display = 'none';
+    
+    // Reset forms
+    document.getElementById('mpesaSubForm').style.display = 'none';
+    document.getElementById('paystackSubForm').style.display = 'none';
+    
+    if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+        statusCheckInterval = null;
+    }
+}
+
+function openSubscriptionModal() {
+    selectedPlan = 'pro';
+    document.getElementById('modalPlanTitle').textContent = 'Subscribe to Professional Plan';
+    document.getElementById('modalPlanPrice').textContent = '2,000 KSH/month';
+    document.getElementById('mpesaAmount').textContent = 'Pay 2,000 KSH';
+    
+    document.getElementById('subscriptionModal').classList.add('active');
+    document.getElementById('paymentStatus').style.display = 'none';
+    
+    // Reset forms
+    document.getElementById('mpesaSubForm').style.display = 'none';
+    document.getElementById('paystackSubForm').style.display = 'none';
     
     if (statusCheckInterval) {
         clearInterval(statusCheckInterval);
