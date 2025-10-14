@@ -294,6 +294,33 @@ class PaymentManager:
             logger.error(f"Error checking subscription: {e}")
             return False
     
+    def has_active_subscription_by_email(self, email: str) -> bool:
+        """
+        Check if email has active subscription
+        
+        Args:
+            email: Email address to check
+            
+        Returns:
+            bool: True if has active subscription
+        """
+        if not self.subscriptions_collection:
+            logger.warning("Subscription collection not available")
+            return False
+            
+        try:
+            subscription = self.subscriptions_collection.find_one({
+                'email': email,
+                'status': 'active',
+                'expires_at': {'$gt': datetime.utcnow()}
+            })
+            
+            return subscription is not None
+            
+        except Exception as e:
+            logger.error(f"Error checking subscription by email: {e}")
+            return False
+    
     def get_subscription(self, phone_number: str) -> Optional[Dict]:
         """
         Get active subscription for phone number
@@ -352,6 +379,40 @@ class PaymentManager:
             
         except Exception as e:
             logger.error(f"Error checking report payment: {e}")
+            return False
+    
+    def check_report_payment_by_email(self, scan_id: str, email: str) -> bool:
+        """
+        Check if report has been paid for by email (Paystack)
+        
+        Args:
+            scan_id: Scan ID
+            email: Email address
+            
+        Returns:
+            bool: True if paid
+        """
+        if not self.payments_collection:
+            logger.warning("Payment collection not available. Cannot check payment status.")
+            return False
+            
+        try:
+            # Check for active subscription by email
+            if self.has_active_subscription_by_email(email):
+                return True
+            
+            # Check for one-time report payment by email
+            payment = self.payments_collection.find_one({
+                'scan_id': scan_id,
+                'email': email,
+                'payment_type': self.PAYMENT_TYPE_REPORT,
+                'status': 'completed'
+            })
+            
+            return payment is not None
+            
+        except Exception as e:
+            logger.error(f"Error checking report payment by email: {e}")
             return False
     
     def get_payment_history(self, phone_number: str, limit: int = 20) -> List[Dict]:

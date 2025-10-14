@@ -610,56 +610,22 @@ function showPaymentModal() {
                     <p style="margin: 0; color: #555; font-size: 0.95rem;">One-time payment for full report access</p>
                 </div>
                 
-                <h4 style="margin-bottom: 1rem; color: #2c3e50;">Choose Payment Method:</h4>
-                
-                <!-- M-Pesa Option -->
-                <div id="mpesaSection" style="margin-bottom: 1.5rem;">
-                    <div id="mpesaSelectBtn" style="background: #27ae60; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem; transition: all 0.3s;">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <div style="display: flex; align-items: center; gap: 1rem;">
-                                <span style="font-size: 2rem;">📱</span>
-                                <div>
-                                    <div style="font-weight: 700; font-size: 1.1rem;">Pay via M-Pesa</div>
-                                    <div style="font-size: 0.9rem; opacity: 0.9;">Recommended for Kenyan users</div>
-                                </div>
-                            </div>
-                            <span style="font-size: 1.5rem;">→</span>
-                        </div>
-                    </div>
-                    
-                    <div id="mpesaForm" style="display: none; padding: 1.5rem; background: #f8f9fa; border-radius: 8px;">
-                        <div class="form-group" style="margin-bottom: 1rem;">
-                            <label for="paymentPhone" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">M-Pesa Phone Number</label>
-                            <input 
-                                type="tel" 
-                                id="paymentPhone" 
-                                placeholder="0712345678 or 254712345678"
-                                style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;"
-                            >
-                        </div>
-                        <button type="button" class="btn btn-primary" id="mpesaPayBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
-                            💳 Pay 100 KSH via M-Pesa
-                        </button>
-                        <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">You'll receive an STK push to complete payment</p>
-                    </div>
-                </div>
-                
-                <!-- Paystack Option -->
+                <!-- Paystack Payment Option -->
                 <div id="paystackSection">
-                    <div id="paystackSelectBtn" style="background: #3498db; color: white; padding: 1rem 1.5rem; border-radius: 8px; cursor: pointer; margin-bottom: 1rem; transition: all 0.3s;">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <div style="display: flex; align-items: center; gap: 1rem;">
-                                <span style="font-size: 2rem;">💳</span>
-                                <div>
-                                    <div style="font-weight: 700; font-size: 1.1rem;">Pay via Card (Paystack)</div>
-                                    <div style="font-size: 0.9rem; opacity: 0.9;">Visa, Mastercard, International</div>
-                                </div>
+                    <div style="background: #3498db; color: white; padding: 1.5rem; border-radius: 8px; text-align: center; margin-bottom: 1.5rem;">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1rem;">
+                            <span style="font-size: 2.5rem;">💳</span>
+                            <div>
+                                <div style="font-weight: 700; font-size: 1.3rem;">Pay 100 KSH</div>
+                                <div style="font-size: 1rem; opacity: 0.9;">via Card, M-Pesa, Airtel Money, M-Pesa Till</div>
                             </div>
-                            <span style="font-size: 1.5rem;">→</span>
+                        </div>
+                        <div style="font-size: 0.9rem; opacity: 0.8; margin-top: 1rem;">
+                            <div>Powered by Paystack</div>
                         </div>
                     </div>
                     
-                    <div id="paystackForm" style="display: none; padding: 1.5rem; background: #f8f9fa; border-radius: 8px;">
+                    <div id="paystackForm" style="padding: 1.5rem; background: #f8f9fa; border-radius: 8px;">
                         <div class="form-group" style="margin-bottom: 1rem;">
                             <label for="paymentEmail" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Email Address</label>
                             <input 
@@ -670,9 +636,9 @@ function showPaymentModal() {
                             >
                         </div>
                         <button type="button" class="btn btn-primary" id="paystackPayBtn" style="width: 100%; padding: 1rem; font-size: 1.1rem; background: #3498db;">
-                            💳 Pay with Card
+                            💳 Pay 100 KSH
                         </button>
-                        <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">Secure payment via Paystack</p>
+                        <p style="font-size: 0.85rem; color: #7f8c8d; margin-top: 0.5rem; text-align: center;">You'll be redirected to secure payment page</p>
                     </div>
                 </div>
                 
@@ -691,26 +657,10 @@ function showPaymentModal() {
     
     // Add event listeners after modal is added to DOM
     document.getElementById('modalCloseBtn').addEventListener('click', closePaymentModal);
-    document.getElementById('mpesaSelectBtn').addEventListener('click', () => selectPaymentMethod('mpesa'));
-    document.getElementById('paystackSelectBtn').addEventListener('click', () => selectPaymentMethod('paystack'));
-    document.getElementById('mpesaPayBtn').addEventListener('click', () => processPayment('mpesa'));
     document.getElementById('paystackPayBtn').addEventListener('click', () => processPayment('paystack'));
 }
 
-function selectPaymentMethod(method) {
-    // Hide all forms
-    document.getElementById('mpesaForm').style.display = 'none';
-    document.getElementById('paystackForm').style.display = 'none';
-    
-    // Show selected form
-    if (method === 'mpesa') {
-        document.getElementById('mpesaForm').style.display = 'block';
-        setTimeout(() => document.getElementById('paymentPhone').focus(), 100);
-    } else if (method === 'paystack') {
-        document.getElementById('paystackForm').style.display = 'block';
-        setTimeout(() => document.getElementById('paymentEmail').focus(), 100);
-    }
-}
+// selectPaymentMethod function removed - only Paystack now
 
 function closePaymentModal() {
     const modal = document.getElementById('paymentModal');
@@ -726,24 +676,12 @@ function closePaymentModal() {
 
 async function processPayment(method) {
     const statusDiv = document.getElementById('paymentStatusDiv');
-    let payBtn, identifier;
+    const identifier = document.getElementById('paymentEmail').value;
+    const payBtn = document.getElementById('paystackPayBtn');
     
-    if (method === 'mpesa') {
-        identifier = document.getElementById('paymentPhone').value;
-        payBtn = document.getElementById('mpesaPayBtn');
-        
-        if (!identifier) {
-            showAlert('Please enter your M-Pesa phone number', 'error');
-            return;
-        }
-    } else if (method === 'paystack') {
-        identifier = document.getElementById('paymentEmail').value;
-        payBtn = document.getElementById('paystackPayBtn');
-        
-        if (!identifier) {
-            showAlert('Please enter your email address', 'error');
-            return;
-        }
+    if (!identifier) {
+        showAlert('Please enter your email address', 'error');
+        return;
     }
     
     statusDiv.style.display = 'block';
@@ -753,43 +691,24 @@ async function processPayment(method) {
     payBtn.disabled = true;
     
     try {
-        let response;
+        console.log(`Processing Paystack payment for scan ${currentScanId}`);
         
-        console.log(`Processing ${method} payment for scan ${currentScanId}`);
+        // Paystack payment only
+        const payload = {
+            email: identifier,
+            amount: 100,
+            type: 'report',
+            scan_id: currentScanId
+        };
+        console.log('Paystack payload:', payload);
         
-        if (method === 'mpesa') {
-            // M-Pesa payment
-            const payload = {
-                phone_number: identifier,
-                scan_id: currentScanId
-            };
-            console.log('M-Pesa payload:', payload);
-            
-            response = await fetch(`${API_BASE_URL}/api/payment/initiate-report`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-        } else if (method === 'paystack') {
-            // Paystack payment
-            const payload = {
-                email: identifier,
-                amount: 100,
-                type: 'report',
-                scan_id: currentScanId
-            };
-            console.log('Paystack payload:', payload);
-            
-            response = await fetch(`${API_BASE_URL}/api/payment/paystack/initialize`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-        }
+        const response = await fetch(`${API_BASE_URL}/api/payment/paystack/initialize`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
         
         const data = await response.json();
         console.log('Payment response:', data);
@@ -801,39 +720,26 @@ async function processPayment(method) {
                 statusDiv.textContent = '✓ Already paid! Downloading...';
                 
                 setTimeout(() => {
-                    window.location.href = `${API_BASE_URL}/api/report/${currentScanId}?phone=${identifier}`;
+                    window.location.href = `${API_BASE_URL}/api/report/${currentScanId}?email=${identifier}`;
                     closePaymentModal();
                 }, 1000);
                 return;
             }
             
-            if (method === 'mpesa') {
-                // M-Pesa flow: STK Push
-                const checkoutId = data.checkout_request_id;
-                
-                statusDiv.style.background = '#e3f2fd';
-                statusDiv.style.color = '#1976d2';
-                statusDiv.innerHTML = `
-                    <div>📱 Check your phone for M-Pesa prompt</div>
-                    <div style="margin-top: 0.5rem; font-size: 0.9rem;">Enter your PIN to complete payment</div>
-                    <div class="loading-spinner" style="margin: 1rem auto;"></div>
-                `;
-                
-                // Start checking payment status
-                startPaymentStatusCheck(checkoutId, identifier);
-                
-            } else if (method === 'paystack') {
-                // Paystack flow: Redirect to payment page
-                const authUrl = data.authorization_url;
-                
-                statusDiv.style.background = '#e3f2fd';
-                statusDiv.style.color = '#1976d2';
-                statusDiv.textContent = 'Redirecting to secure payment page...';
-                
-                setTimeout(() => {
-                    window.location.href = authUrl;
-                }, 1000);
-            }
+            // Paystack flow: Redirect to payment page
+            const authUrl = data.authorization_url;
+            
+            statusDiv.style.background = '#e3f2fd';
+            statusDiv.style.color = '#1976d2';
+            statusDiv.innerHTML = `
+                <div>💳 Redirecting to secure payment page...</div>
+                <div style="margin-top: 0.5rem; font-size: 0.9rem;">Choose your preferred payment method</div>
+                <div class="loading-spinner" style="margin: 1rem auto;"></div>
+            `;
+            
+            setTimeout(() => {
+                window.location.href = authUrl;
+            }, 1500);
             
         } else {
             statusDiv.style.background = '#f8d7da';

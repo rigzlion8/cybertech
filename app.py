@@ -193,12 +193,12 @@ def get_report(scan_id):
     """Download scan report (requires payment or subscription)"""
     try:
         # Check if payment is required
-        phone_number = request.args.get('phone')
+        email = request.args.get('email')
         
-        # If phone number provided, check payment status
-        if phone_number:
+        # If email provided, check payment status
+        if email:
             # Check if user has paid for this report or has subscription
-            has_paid = payment_manager.check_report_payment(scan_id, phone_number)
+            has_paid = payment_manager.check_report_payment_by_email(scan_id, email)
             
             if not has_paid:
                 return jsonify({
@@ -778,7 +778,8 @@ def paystack_callback():
                     'success': True,
                     'mpesa_receipt': reference,
                     'transaction_date': result.get('paid_at'),
-                    'amount': result.get('amount')
+                    'amount': result.get('amount'),
+                    'email': result.get('customer', {}).get('email')
                 }
             )
             
