@@ -5,12 +5,14 @@ Main Flask Application
 """
 
 import os
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, jsonify, send_file, send_from_directory, session, redirect, url_for, render_template_string
 from flask_cors import CORS
 from dotenv import load_dotenv
 import logging
 from datetime import datetime
 import json
+import hashlib
+import secrets
 
 from modules.scanner import SecurityScanner
 from modules.report_generator import ReportGenerator
@@ -26,8 +28,12 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', static_url_path='')
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', secrets.token_hex(32))
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max request size
+
+# Admin credentials (in production, store in environment variables)
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH', hashlib.sha256('CyberTech2024!'.encode()).hexdigest())
 
 # Enable CORS
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -57,6 +63,26 @@ payment_manager = PaymentManager()
 
 # Initialize email system (Resend)
 resend_email = ResendEmail()
+
+
+# Admin authentication functions
+def is_admin_logged_in():
+    """Check if admin is logged in"""
+    return session.get('admin_logged_in', False)
+
+def require_admin_auth(f):
+    """Decorator to require admin authentication"""
+    def decorated_function(*args, **kwargs):
+        if not is_admin_logged_in():
+            return jsonify({'error': 'Admin authentication required'}), 401
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
+
+def verify_admin_credentials(username, password):
+    """Verify admin credentials"""
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    return username == ADMIN_USERNAME and password_hash == ADMIN_PASSWORD_HASH
 
 
 @app.route('/')
@@ -264,10 +290,13 @@ def quick_check():
 @app.route('/admin')
 def admin_page():
     """Serve the admin page"""
+    if not is_admin_logged_in():
+        return redirect('/admin-login')
     return send_from_directory('static', 'admin.html')
 
 
 @app.route('/api/admin/scans', methods=['GET'])
+@require_admin_auth
 def get_all_scans():
     """
     Get all scans with pagination
@@ -305,6 +334,7 @@ def get_all_scans():
 
 
 @app.route('/api/admin/scan/<scan_id>', methods=['GET'])
+@require_admin_auth
 def get_scan_details(scan_id):
     """Get detailed scan information by ID"""
     try:
@@ -330,6 +360,7 @@ def get_scan_details(scan_id):
 
 
 @app.route('/api/admin/scan/<scan_id>', methods=['DELETE'])
+@require_admin_auth
 def delete_scan(scan_id):
     """Delete a scan by ID"""
     try:
@@ -360,6 +391,7 @@ def delete_scan(scan_id):
 
 
 @app.route('/api/admin/statistics', methods=['GET'])
+@require_admin_auth
 def get_statistics():
     """Get overall scan statistics"""
     try:
@@ -379,6 +411,7 @@ def get_statistics():
 
 
 @app.route('/api/admin/trends', methods=['GET'])
+@require_admin_auth
 def get_trends():
     """
     Get trend data for the specified period
@@ -403,6 +436,7 @@ def get_trends():
 
 
 @app.route('/api/admin/target/<path:target>/history', methods=['GET'])
+@require_admin_auth
 def get_target_scan_history(target):
     """Get scan history for a specific target"""
     try:
@@ -424,6 +458,7 @@ def get_target_scan_history(target):
 
 
 @app.route('/api/admin/target/<path:target>/improvement', methods=['GET'])
+@require_admin_auth
 def get_target_improvement(target):
     """Get security score improvement trend for a specific target"""
     try:
@@ -446,6 +481,197 @@ def get_target_improvement(target):
 def pricing_page():
     """Serve the pricing/subscription page"""
     return send_from_directory('static', 'pricing.html')
+
+
+@app.route('/admin-login', methods=['GET', 'POST'])
+def admin_login():
+    """Admin login page and authentication"""
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        
+        if verify_admin_credentials(username, password):
+            session['admin_logged_in'] = True
+            session['admin_username'] = username
+            logger.info(f"Admin {username} logged in successfully")
+            return jsonify({
+                'status': 'success',
+                'message': 'Login successful',
+                'redirect': '/admin'
+            }), 200
+        else:
+            logger.warning(f"Failed admin login attempt for username: {username}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Invalid credentials'
+            }), 401
+    
+    # GET request - serve login page
+    login_html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Admin Login - CyberTech</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+                font-family: 'Inter', sans-serif; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+            }
+            .login-container {
+                background: white;
+                padding: 3rem;
+                border-radius: 12px;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                width: 100%;
+                max-width: 400px;
+            }
+            .logo {
+                text-align: center;
+                margin-bottom: 2rem;
+            }
+            .logo-icon { font-size: 3rem; }
+            .logo-text { 
+                font-size: 1.5rem; 
+                font-weight: 700; 
+                color: #333; 
+                margin-top: 0.5rem;
+            }
+            .form-group {
+                margin-bottom: 1.5rem;
+            }
+            label {
+                display: block;
+                margin-bottom: 0.5rem;
+                font-weight: 500;
+                color: #333;
+            }
+            input {
+                width: 100%;
+                padding: 0.75rem;
+                border: 2px solid #ddd;
+                border-radius: 8px;
+                font-size: 1rem;
+                transition: border-color 0.3s;
+            }
+            input:focus {
+                outline: none;
+                border-color: #667eea;
+            }
+            .btn {
+                width: 100%;
+                padding: 0.75rem;
+                background: #667eea;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 1rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: background 0.3s;
+            }
+            .btn:hover {
+                background: #5a6fd8;
+            }
+            .error {
+                background: #fee;
+                color: #c33;
+                padding: 0.75rem;
+                border-radius: 8px;
+                margin-bottom: 1rem;
+                display: none;
+            }
+            .back-link {
+                text-align: center;
+                margin-top: 1.5rem;
+            }
+            .back-link a {
+                color: #667eea;
+                text-decoration: none;
+                font-weight: 500;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-container">
+            <div class="logo">
+                <div class="logo-icon">🛡️</div>
+                <div class="logo-text">CyberTech Admin</div>
+            </div>
+            
+            <div class="error" id="errorMessage"></div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                
+                <button type="submit" class="btn">Login to Admin Panel</button>
+            </form>
+            
+            <div class="back-link">
+                <a href="/">← Back to Home</a>
+            </div>
+        </div>
+        
+        <script>
+            document.getElementById('loginForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const errorDiv = document.getElementById('errorMessage');
+                
+                try {
+                    const response = await fetch('/admin-login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        window.location.href = data.redirect;
+                    } else {
+                        errorDiv.textContent = data.message;
+                        errorDiv.style.display = 'block';
+                    }
+                } catch (error) {
+                    errorDiv.textContent = 'Network error. Please try again.';
+                    errorDiv.style.display = 'block';
+                }
+            });
+        </script>
+    </body>
+    </html>
+    """
+    return login_html
+
+
+@app.route('/admin-logout')
+def admin_logout():
+    """Admin logout"""
+    session.pop('admin_logged_in', None)
+    session.pop('admin_username', None)
+    logger.info("Admin logged out")
+    return redirect('/admin-login')
 
 
 @app.route('/api/payment/test-config', methods=['GET'])
