@@ -7,6 +7,8 @@ Main Flask Application
 import os
 from flask import Flask, request, jsonify, send_file, send_from_directory, session, redirect, url_for, render_template_string
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 import logging
 from datetime import datetime
@@ -37,6 +39,14 @@ ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH', hashlib.sha256('CyberTech
 
 # Enable CORS
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# Initialize rate limiting
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
 
 # Configure logging
 logging.basicConfig(
@@ -107,6 +117,7 @@ def health_check():
 
 
 @app.route('/api/scan', methods=['POST'])
+@limiter.limit("10 per hour")  # Limit scans to 10 per hour per IP
 def perform_scan():
     """
     Perform comprehensive security scan
@@ -258,6 +269,7 @@ def get_report(scan_id):
 
 
 @app.route('/api/quick-check', methods=['POST'])
+@limiter.limit("30 per hour")  # Limit quick checks to 30 per hour per IP
 def quick_check():
     """Perform a quick security check (no full scan)"""
     try:
@@ -1057,6 +1069,25 @@ def not_found(e):
 @app.errorhandler(500)
 def internal_error(e):
     return jsonify({'error': 'Internal server error', 'status': 'error'}), 500
+
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({
+        'error': 'Rate limit exceeded',
+        'status': 'error',
+        'message': 'Too many requests. Please try again later.'
+    }), 429
+
+
+# Custom error handler for scanner validation errors
+@app.errorhandler(ValueError)
+def handle_value_error(e):
+    return jsonify({
+        'error': 'Invalid target',
+        'status': 'error',
+        'message': str(e)
+    }), 400
 
 
 if __name__ == '__main__':

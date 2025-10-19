@@ -27,32 +27,140 @@ class SecurityScanner:
     """Main security scanner class"""
     
     def __init__(self, target, scan_type='full', options=None):
-        self.target = target
+        self.original_target = target
         self.scan_type = scan_type
         self.options = options or {}
         self.scan_id = str(uuid.uuid4())[:8]
         self.start_time = datetime.utcnow()
         
-        # Parse target
+        # Parse and normalize target
         self.parsed_url = self._parse_target(target)
+        self.normalized_target = self._normalize_target(target)
         
     def _parse_target(self, target):
-        """Parse and validate target"""
-        if not target.startswith(('http://', 'https://')):
-            target = 'https://' + target
+        """Parse and validate target - handles both IP addresses and URLs"""
+        # Clean and normalize the target
+        normalized_target = self._normalize_target(target)
         
-        if not validators.url(target):
+        # Validate the target
+        self._validate_target(target, normalized_target)
+        
+        if not validators.url(normalized_target):
             logger.warning(f"Invalid URL format: {target}")
         
-        return urlparse(target)
+        return urlparse(normalized_target)
+    
+    def _validate_target(self, original_target, normalized_target):
+        """Validate target to prevent scanning localhost or problematic addresses"""
+        blocked_targets = [
+            'localhost',
+            '127.0.0.1',
+            '0.0.0.0',
+            '::1',
+            'localhost.localdomain',
+            '127.0.0.0/8',
+            '10.0.0.0/8',
+            '172.16.0.0/12',
+            '192.168.0.0/16',
+            '169.254.0.0/16',
+        ]
+        
+        # Check for blocked targets
+        for blocked in blocked_targets:
+            if blocked in original_target.lower() or blocked in normalized_target.lower():
+                raise ValueError(f"Scanning localhost or private network addresses ({blocked}) is not allowed")
+        
+        # Check for localhost in hostname
+        parsed = urlparse(normalized_target)
+        hostname = parsed.hostname or original_target
+        
+        if hostname and any(local in hostname.lower() for local in ['localhost', '127.', '0.0.0.0', '::1']):
+            raise ValueError("Scanning localhost addresses is not allowed for security reasons")
+        
+        # Check if it's a private IP address
+        if self._is_private_ip(hostname):
+            raise ValueError("Scanning private IP addresses is not allowed")
+    
+    def _normalize_target(self, target):
+        """Normalize target by adding protocol and www prefix when necessary"""
+        # Remove any whitespace
+        target = target.strip()
+        
+        # Check if it's already a full URL
+        if target.startswith(('http://', 'https://')):
+            return target
+        
+        # Check if it's an IP address (IPv4 or IPv6)
+        if self._is_ip_address(target):
+            return f'https://{target}'
+        
+        # It's a domain/URL without protocol
+        # Check if it already has www prefix
+        if target.startswith('www.'):
+            return f'https://{target}'
+        
+        # Check if it needs www prefix (if no subdomain present)
+        if not self._has_subdomain(target):
+            # Add www prefix
+            return f'https://www.{target}'
+        
+        # Has subdomain, just add https://
+        return f'https://{target}'
+    
+    def _is_ip_address(self, target):
+        """Check if target is an IP address (IPv4 or IPv6)"""
+        import ipaddress
+        try:
+            ipaddress.ip_address(target)
+            return True
+        except ValueError:
+            return False
+    
+    def _has_subdomain(self, target):
+        """Check if target already has a subdomain (excluding www)"""
+        # Remove any potential protocol if present
+        clean_target = target.replace('http://', '').replace('https://', '')
+        
+        # Remove www. prefix if present for subdomain detection
+        clean_target = clean_target.replace('www.', '')
+        
+        # For IP addresses, consider them as having "subdomain" to avoid adding www
+        if self._is_ip_address(clean_target):
+            return True
+        
+        # Split by dots and check if there are at least 2 parts (domain.tld)
+        parts = clean_target.split('.')
+        if len(parts) >= 3:
+            return True
+        
+        # Check for common multi-part TLDs
+        multi_part_tlds = ['.co.uk', '.co.za', '.com.au', '.org.uk', '.net.au']
+        for tld in multi_part_tlds:
+            if clean_target.endswith(tld):
+                # If the domain has more than just the domain name before the TLD
+                domain_part = clean_target[:-len(tld)]
+                if '.' in domain_part:
+                    return True
+        
+        return False
+    
+    def _is_private_ip(self, ip_address):
+        """Check if IP address is in private range"""
+        import ipaddress
+        try:
+            ip = ipaddress.ip_address(ip_address)
+            return ip.is_private
+        except ValueError:
+            return False
     
     def scan(self):
         """Perform comprehensive security scan"""
-        logger.info(f"Starting {self.scan_type} scan for {self.target}")
+        logger.info(f"Starting {self.scan_type} scan for {self.original_target} -> {self.normalized_target}")
         
         results = {
             'scan_id': self.scan_id,
-            'target': self.target,
+            'target': self.original_target,
+            'normalized_target': self.normalized_target,
             'scan_type': self.scan_type,
             'start_time': self.start_time.isoformat(),
             'results': {}
@@ -71,55 +179,55 @@ class SecurityScanner:
             # Vulnerability Scanning
             if scan_config.get('vulnerability_scan'):
                 logger.info("Starting vulnerability scan...")
-                vuln_scanner = VulnerabilityScanner(self.target)
+                vuln_scanner = VulnerabilityScanner(self.normalized_target)
                 results['results']['vulnerabilities'] = vuln_scanner.scan()
             
             # SSL/TLS Check
             if scan_config.get('ssl_check'):
                 logger.info("Starting SSL/TLS check...")
-                ssl_checker = SSLChecker(self.parsed_url.hostname or self.target)
+                ssl_checker = SSLChecker(self.parsed_url.hostname or self.original_target)
                 results['results']['ssl_tls'] = ssl_checker.check()
             
             # HTTP Headers Analysis
             if scan_config.get('headers_check'):
                 logger.info("Starting headers analysis...")
-                header_analyzer = HeaderAnalyzer(self.target)
+                header_analyzer = HeaderAnalyzer(self.normalized_target)
                 results['results']['headers'] = header_analyzer.analyze()
             
             # Password Security Check
             if scan_config.get('password_check'):
                 logger.info("Starting password security check...")
-                password_checker = PasswordChecker(self.target)
+                password_checker = PasswordChecker(self.normalized_target)
                 results['results']['passwords'] = password_checker.check()
             
             # Database Security Check
             if scan_config.get('database_check'):
                 logger.info("Starting database security check...")
-                db_checker = DatabaseChecker(self.target)
+                db_checker = DatabaseChecker(self.normalized_target)
                 results['results']['database'] = db_checker.check()
             
             # SQL Injection Scanner
             if scan_config.get('sql_injection_check'):
                 logger.info("Starting SQL injection scan...")
-                sqli_scanner = SQLInjectionScanner(self.target)
+                sqli_scanner = SQLInjectionScanner(self.normalized_target)
                 results['results']['sql_injection'] = sqli_scanner.scan()
             
             # XSS Scanner
             if scan_config.get('xss_check'):
                 logger.info("Starting XSS scan...")
-                xss_scanner = XSSScanner(self.target)
+                xss_scanner = XSSScanner(self.normalized_target)
                 results['results']['xss'] = xss_scanner.scan()
             
             # Quick Wins Scanner
             if scan_config.get('quick_wins_check'):
                 logger.info("Starting quick wins scan...")
-                quick_scanner = QuickWinsScanner(self.target)
+                quick_scanner = QuickWinsScanner(self.normalized_target)
                 results['results']['quick_wins'] = quick_scanner.scan()
             
             # Directory Enumeration
             if scan_config.get('directory_enum_check'):
                 logger.info("Starting directory enumeration...")
-                dir_scanner = DirectoryEnumerationScanner(self.target)
+                dir_scanner = DirectoryEnumerationScanner(self.normalized_target)
                 results['results']['directory_enum'] = dir_scanner.scan()
             
             # Calculate overall security score
@@ -141,21 +249,22 @@ class SecurityScanner:
     
     def quick_check(self):
         """Perform quick security check"""
-        logger.info(f"Starting quick check for {self.target}")
+        logger.info(f"Starting quick check for {self.original_target} -> {self.normalized_target}")
         
         results = {
-            'target': self.target,
+            'target': self.original_target,
+            'normalized_target': self.normalized_target,
             'timestamp': datetime.utcnow().isoformat(),
             'checks': {}
         }
         
         try:
             # Quick SSL check
-            ssl_checker = SSLChecker(self.parsed_url.hostname or self.target)
+            ssl_checker = SSLChecker(self.parsed_url.hostname or self.original_target)
             results['checks']['ssl'] = ssl_checker.quick_check()
             
             # Quick headers check
-            header_analyzer = HeaderAnalyzer(self.target)
+            header_analyzer = HeaderAnalyzer(self.normalized_target)
             results['checks']['headers'] = header_analyzer.quick_analyze()
             
             # Calculate quick score

@@ -105,7 +105,12 @@ A comprehensive cybersecurity application for detecting data leaks, performing p
 ### Web Interface
 
 1. Navigate to `http://localhost:5000`
-2. Enter the target URL or IP address
+2. Enter the target website URL or IP address
+   - **URL formats supported**:
+     - Domain names: `example.com` (automatically adds https:// and www when needed)
+     - Full URLs: `https://example.com` or `http://example.com`
+     - IP addresses: `192.168.1.1` or `2001:db8::1`
+     - Subdomains: `api.example.com` or `blog.google.com`
 3. Provide your email address for report delivery
 4. Select scan type:
    - **Full Scan**: Comprehensive security assessment
